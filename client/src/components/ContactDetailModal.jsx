@@ -1,6 +1,6 @@
 import { X, Phone, Mail, Edit2, Trash2 } from 'lucide-react';
 
-const ContactDetailModal = ({ contact, onClose }) => {
+const ContactDetailModal = ({ contact, onClose, onEdit }) => {
   const formatLastSeen = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -18,9 +18,9 @@ const ContactDetailModal = ({ contact, onClose }) => {
   };
 
   const handleEdit = () => {
-    // TODO: Implement edit functionality
-    console.log('Edit contact:', contact);
-    alert('Edit functionality coming soon!');
+    if (onEdit) {
+      onEdit(contact);
+    }
   };
 
   const handleDelete = () => {
@@ -72,12 +72,7 @@ const ContactDetailModal = ({ contact, onClose }) => {
               <p className="text-xs text-gray-500 mb-1">Visit Frequency</p>
               <p className="font-semibold text-gray-900">{contact.visitFrequency}</p>
             </div>
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-1">Status</p>
-              <span className="inline-flex px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-lg">
-                Active
-              </span>
-            </div>
+
           </div>
 
           {/* Contact Information */}

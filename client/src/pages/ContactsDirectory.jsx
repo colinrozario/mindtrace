@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Search, Grid, List, Plus, Eye } from 'lucide-react';
 import AddContactModal from '../components/AddContactModal';
 import ContactDetailModal from '../components/ContactDetailModal';
+import EditContactModal from '../components/EditContactModal';
 
 const ContactsDirectory = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -10,8 +11,9 @@ const ContactsDirectory = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedContact, setSelectedContact] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  const contacts = [
+  const [contacts, setContacts] = useState([
     {
       id: 1,
       name: 'Sarah Johnson',
@@ -108,7 +110,7 @@ const ContactsDirectory = () => {
       totalInteractions: 62,
       isActive: true
     }
-  ];
+  ]);
 
   const relationshipTypes = [
     { value: 'all', label: 'All Contacts' },
@@ -315,13 +317,30 @@ const ContactsDirectory = () => {
       )}
 
       {/* Modals */}
-      {showAddModal && <AddContactModal onClose={() => setShowAddModal(false)} />}
+      {showAddModal && <AddContactModal isOpen={true} onClose={() => setShowAddModal(false)} />}
       {showDetailModal && selectedContact && (
         <ContactDetailModal
           contact={selectedContact}
           onClose={() => {
             setShowDetailModal(false);
             setSelectedContact(null);
+          }}
+          onEdit={(contact) => {
+            setShowDetailModal(false);
+            setShowEditModal(true);
+          }}
+        />
+      )}
+      {showEditModal && selectedContact && (
+        <EditContactModal
+          isOpen={true}
+          contact={selectedContact}
+          onClose={() => setShowEditModal(false)}
+          onUpdate={(updatedContact) => {
+            setContacts(contacts.map(c => c.id === updatedContact.id ? updatedContact : c));
+            setShowEditModal(false);
+            // Optionally reopen detail modal or just stay on list
+            // For now, let's just close
           }}
         />
       )}
