@@ -105,7 +105,6 @@ const SOSSettings = () => {
           </p>
         </div>
 
-        {/* Auto Actions */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
             <Settings className="h-5 w-5" />
