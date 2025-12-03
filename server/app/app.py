@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from app.routers import face_routes
 
 load_dotenv()
 
@@ -17,6 +18,7 @@ app = FastAPI(
 origins = [
     CLIENT_URL,
     "http://localhost:5173",
+    "http://localhost:5174", # glass-client might run here
 ]
 
 app.add_middleware(
@@ -27,6 +29,8 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+app.include_router(face_routes.router, prefix="/api/face", tags=["Face Recognition"])
 
 @app.get("/")
 def server_status():
