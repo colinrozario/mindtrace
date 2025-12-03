@@ -1,72 +1,55 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, AlertCircle, Info, AlertTriangle, X, Filter } from 'lucide-react';
+import { alertsApi } from '../services/api';
+import toast from 'react-hot-toast';
 
 const AlertsNotifications = () => {
   const [selectedSeverity, setSelectedSeverity] = useState('all');
   const [selectedAlert, setSelectedAlert] = useState(null);
+  
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const alerts = [
-    {
-      id: 1,
-      type: 'visitor-arrival',
-      severity: 'info',
-      title: 'Visitor Arrived',
-      message: 'Sarah Johnson has been recognized',
-      timestamp: '2025-12-03T10:30:00',
-      read: false,
-      data: { personName: 'Sarah Johnson', location: 'Front Door' }
-    },
-    {
-      id: 2,
-      type: 'conversation-summary',
-      severity: 'info',
-      title: 'New Conversation Summary Ready',
-      message: 'AI has processed conversation with Sarah Johnson',
-      timestamp: '2025-12-03T10:45:00',
-      read: false,
-      data: { personName: 'Sarah Johnson' }
-    },
-    {
-      id: 3,
-      type: 'missed-medication',
-      severity: 'warning',
-      title: 'Medication Reminder Missed',
-      message: 'Morning medication was not acknowledged',
-      timestamp: '2025-12-03T09:15:00',
-      read: true,
-      data: { medicationName: 'Morning Dose', scheduledTime: '9:00 AM' }
-    },
-    {
-      id: 4,
-      type: 'unknown-visitor',
-      severity: 'warning',
-      title: 'Unknown Person Detected',
-      message: 'Unrecognized person approached at front door',
-      timestamp: '2025-12-02T15:20:00',
-      read: true,
-      data: { location: 'Front Door', photoAvailable: true }
-    },
-    {
-      id: 5,
-      type: 'low-battery',
-      severity: 'warning',
-      title: 'Glasses Battery Low',
-      message: 'Smart glasses battery below 20%',
-      timestamp: '2025-12-02T18:00:00',
-      read: true,
-      data: { batteryPercentage: 18, estimatedTime: '2 hours' }
-    },
-    {
-      id: 6,
-      type: 'confusion-detected',
-      severity: 'critical',
-      title: 'Confusion Pattern Detected',
-      message: 'Repeated confusion detected - possible symptom flare-up',
-      timestamp: '2025-12-01T14:30:00',
-      read: true,
-      data: { pattern: 'Repeated questions', duration: '15 minutes' }
+  const fetchAlerts = async () => {
+    try {
+      setLoading(true);
+      const params = {
+        severity: selectedSeverity !== 'all' ? selectedSeverity : undefined
+      };
+      const response = await alertsApi.getAll(params);
+      setAlerts(response.data);
+    } catch (error) {
+      console.error("Error fetching alerts:", error);
+      toast.error("Failed to load alerts");
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchAlerts();
+  }, [selectedSeverity]);
+
+  const handleMarkRead = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await alertsApi.markRead(id);
+      setAlerts(alerts.map(a => a.id === id ? { ...a, read: true } : a));
+    } catch (error) {
+      console.error("Error marking alert as read:", error);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await alertsApi.markAllRead();
+      setAlerts(alerts.map(a => ({ ...a, read: true })));
+      toast.success("All alerts marked as read");
+    } catch (error) {
+      console.error("Error marking all read:", error);
+      toast.error("Failed to update alerts");
+    }
+  };
 
   const getSeverityConfig = (severity) => {
     const configs = {
@@ -114,10 +97,6 @@ const AlertsNotifications = () => {
     }
   };
 
-  const filteredAlerts = alerts.filter(alert =>
-    selectedSeverity === 'all' || alert.severity === selectedSeverity
-  );
-
   return (
     <div className="p-6 lg:p-8 max-w-[1600px] mx-auto">
       <div className="mb-8">
@@ -148,7 +127,10 @@ const AlertsNotifications = () => {
               </button>
             ))}
           </div>
-          <button className="ml-auto text-sm font-medium text-indigo-600">
+          <button 
+            onClick={handleMarkAllRead}
+            className="ml-auto text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+          >
             Mark All as Read
           </button>
         </div>
@@ -156,7 +138,11 @@ const AlertsNotifications = () => {
 
       {/* Alerts List */}
       <div className="space-y-3">
-        {filteredAlerts.map((alert) => {
+        {loading ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Loading alerts...</p>
+          </div>
+        ) : alerts.map((alert) => {
           const config = getSeverityConfig(alert.severity);
           const Icon = config.icon;
 
@@ -168,7 +154,10 @@ const AlertsNotifications = () => {
                   ? 'bg-white border-gray-200' 
                   : `${config.cardBg} ${config.border} shadow-md`
               }`}
-              onClick={() => setSelectedAlert(alert)}
+              onClick={() => {
+                setSelectedAlert(alert);
+                if (!alert.read) handleMarkRead({ stopPropagation: () => {} }, alert.id);
+              }}
             >
               <div className="flex items-start gap-4">
                 <div className={`${config.bg} ${config.text} w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm`}>
@@ -194,6 +183,12 @@ const AlertsNotifications = () => {
             </div>
           );
         })}
+        
+        {!loading && alerts.length === 0 && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
+            <p className="text-gray-500 text-lg">No alerts found</p>
+          </div>
+        )}
       </div>
 
       {/* Alert Detail Modal */}

@@ -11,6 +11,11 @@ from starlette.middleware.sessions import SessionMiddleware
 from .database import Base, engine
 from .routes.authRoutes import router as auth_router
 from .routes.faceRoutes import router as face_router
+from .routes.contactRoutes import router as contact_router
+from .routes.interactionRoutes import router as interaction_router
+from .routes.alertRoutes import router as alert_router
+from .routes.reminderRoutes import router as reminder_router
+from .routes.sosRoutes import router as sos_router
 
 CLIENT_URL = os.getenv("CLIENT_URL", "http://localhost:5173")
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-should-be-in-env")
@@ -43,6 +48,11 @@ app.add_middleware(SessionMiddleware,secret_key=SECRET_KEY)
 
 app.include_router(auth_router)
 app.include_router(face_router, prefix="/face", tags=["Face Recognition"])
+app.include_router(contact_router)
+app.include_router(interaction_router)
+app.include_router(alert_router)
+app.include_router(reminder_router)
+app.include_router(sos_router)
 
 @app.get("/")
 def server_status():

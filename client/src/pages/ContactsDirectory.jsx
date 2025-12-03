@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Grid, List, Plus, Eye } from 'lucide-react';
 import AddContactModal from '../components/AddContactModal';
 import ContactDetailModal from '../components/ContactDetailModal';
 import EditContactModal from '../components/EditContactModal';
+import { contactsApi } from '../services/api';
+import toast from 'react-hot-toast';
 
 const ContactsDirectory = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -12,105 +14,50 @@ const ContactsDirectory = () => {
   const [selectedContact, setSelectedContact] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  
+  const [contacts, setContacts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [contacts, setContacts] = useState([
-    {
-      id: 1,
-      name: 'Sarah Johnson',
-      relationship: 'family',
-      relationshipDetail: 'Daughter',
-      avatar: 'SJ',
-      color: 'indigo',
-      photos: [],
-      notes: 'Visits every Sunday. Primary caregiver. Works as a nurse at City Hospital.',
-      phoneNumber: '(555) 123-4567',
-      email: 'sarah.j@email.com',
-      visitFrequency: 'Weekly',
-      lastSeen: '2025-12-03T10:30:00',
-      totalInteractions: 47,
-      isActive: true
-    },
-    {
-      id: 2,
-      name: 'Dr. Michael Chen',
-      relationship: 'doctor',
-      relationshipDetail: 'Neurologist',
-      avatar: 'MC',
-      color: 'blue',
-      photos: [],
-      notes: 'Neurologist at City Hospital. Appointments every 2 weeks. Very patient and thorough.',
-      phoneNumber: '(555) 234-5678',
-      email: 'dr.chen@cityhospital.com',
-      visitFrequency: 'Bi-weekly',
-      lastSeen: '2025-12-02T14:00:00',
-      totalInteractions: 24,
-      isActive: true
-    },
-    {
-      id: 3,
-      name: 'Maria Garcia',
-      relationship: 'caretaker',
-      relationshipDetail: 'Home Care Nurse',
-      avatar: 'MG',
-      color: 'emerald',
-      photos: [],
-      notes: 'Home care nurse. Mon/Wed/Fri mornings. Very reliable and caring.',
-      phoneNumber: '(555) 345-6789',
-      email: 'maria.garcia@homecare.com',
-      visitFrequency: '3x per week',
-      lastSeen: '2025-12-03T08:00:00',
-      totalInteractions: 89,
-      isActive: true
-    },
-    {
-      id: 4,
-      name: 'Tommy Johnson',
-      relationship: 'family',
-      relationshipDetail: 'Grandson',
-      avatar: 'TJ',
-      color: 'purple',
-      photos: [],
-      notes: "Sarah's son. 12 years old. Loves talking about video games and dinosaurs.",
-      phoneNumber: '',
-      email: '',
-      visitFrequency: 'Weekly',
-      lastSeen: '2025-11-30T16:45:00',
-      totalInteractions: 31,
-      isActive: true
-    },
-    {
-      id: 5,
-      name: 'Robert Miller',
-      relationship: 'friend',
-      relationshipDetail: 'Neighbor',
-      avatar: 'RM',
-      color: 'yellow',
-      photos: [],
-      notes: 'Neighbor from 42B. Plays chess on Thursdays. Known each other for 15 years.',
-      phoneNumber: '(555) 456-7890',
-      email: 'robert.m@email.com',
-      visitFrequency: 'Weekly',
-      lastSeen: '2025-11-28T14:00:00',
-      totalInteractions: 156,
-      isActive: true
-    },
-    {
-      id: 6,
-      name: 'Emily Watson',
-      relationship: 'caretaker',
-      relationshipDetail: 'Evening Caretaker',
-      avatar: 'EW',
-      color: 'pink',
-      photos: [],
-      notes: 'Evening shift caretaker. 6 PM - 10 PM. Helps with dinner and evening routine.',
-      phoneNumber: '(555) 567-8901',
-      email: 'emily.w@homecare.com',
-      visitFrequency: 'Daily',
-      lastSeen: '2025-12-02T18:00:00',
-      totalInteractions: 62,
-      isActive: true
+  const fetchContacts = async () => {
+    try {
+      setLoading(true);
+      const response = await contactsApi.getAll();
+      setContacts(response.data);
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+      toast.error("Failed to load contacts");
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    fetchContacts();
+  }, []);
+
+  const handleAddContact = async (newContactData) => {
+    try {
+      await contactsApi.create(newContactData);
+      toast.success("Contact added successfully");
+      setShowAddModal(false);
+      fetchContacts();
+    } catch (error) {
+      console.error("Error adding contact:", error);
+      toast.error("Failed to add contact");
+    }
+  };
+
+  const handleUpdateContact = async (updatedContactData) => {
+    try {
+      await contactsApi.update(updatedContactData.id, updatedContactData);
+      toast.success("Contact updated successfully");
+      setShowEditModal(false);
+      fetchContacts();
+    } catch (error) {
+      console.error("Error updating contact:", error);
+      toast.error("Failed to update contact");
+    }
+  };
 
   const relationshipTypes = [
     { value: 'all', label: 'All Contacts' },
@@ -124,7 +71,7 @@ const ContactsDirectory = () => {
 
   const filteredContacts = contacts.filter(contact => {
     const matchesSearch = contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      contact.relationshipDetail.toLowerCase().includes(searchQuery.toLowerCase());
+      (contact.relationshipDetail && contact.relationshipDetail.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesRelationship = selectedRelationship === 'all' || contact.relationship === selectedRelationship;
 
@@ -132,6 +79,7 @@ const ContactsDirectory = () => {
   });
 
   const formatLastSeen = (timestamp) => {
+    if (!timestamp) return 'Never';
     const date = new Date(timestamp);
     const now = new Date();
     const diffMs = now - date;
@@ -226,7 +174,11 @@ const ContactsDirectory = () => {
       </div>
 
       {/* Contacts Grid/List */}
-      {viewMode === 'grid' ? (
+      {loading ? (
+        <div className="text-center py-12">
+          <p className="text-gray-500">Loading contacts...</p>
+        </div>
+      ) : viewMode === 'grid' ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredContacts.map((contact) => (
             <div
@@ -239,14 +191,14 @@ const ContactsDirectory = () => {
                 transition-all duration-300 cursor-pointer group"
             >
               <div className="flex flex-col items-center text-center mb-4">
-                <div className={`w-20 h-20 rounded-full bg-linear-to-br from-${contact.color}-400 to-${contact.color}-600 flex items-center justify-center text-white font-semibold text-2xl mb-4`}>
-                  {contact.avatar}
+                <div className={`w-20 h-20 rounded-full bg-${contact.color || 'indigo'}-500 flex items-center justify-center text-white font-semibold text-2xl mb-4`}>
+                  {contact.avatar || contact.name.substring(0, 2).toUpperCase()}
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
                   {contact.name}
                 </h3>
                 <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg mt-2">
-                  {contact.relationshipDetail}
+                  {contact.relationshipDetail || contact.relationship}
                 </span>
               </div>
 
@@ -256,12 +208,8 @@ const ContactsDirectory = () => {
                   <span className="font-medium text-gray-900">{formatLastSeen(contact.lastSeen)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Interactions:</span>
-                  <span className="font-medium text-gray-900">{contact.totalInteractions}</span>
-                </div>
-                <div className="flex justify-between">
                   <span>Frequency:</span>
-                  <span className="font-medium text-gray-900">{contact.visitFrequency}</span>
+                  <span className="font-medium text-gray-900">{contact.visitFrequency || 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -280,14 +228,14 @@ const ContactsDirectory = () => {
                 transition-all duration-300 cursor-pointer group"
             >
               <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-full bg-linear-to-br from-${contact.color}-400 to-${contact.color}-600 flex items-center justify-center text-white font-semibold text-lg shrink-0`}>
-                  {contact.avatar}
+                <div className={`w-14 h-14 rounded-full bg-${contact.color || 'indigo'}-500 flex items-center justify-center text-white font-semibold text-lg shrink-0`}>
+                  {contact.avatar || contact.name.substring(0, 2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
                     {contact.name}
                   </h3>
-                  <p className="text-sm text-gray-500">{contact.relationshipDetail}</p>
+                  <p className="text-sm text-gray-500">{contact.relationshipDetail || contact.relationship}</p>
                 </div>
                 <div className="hidden md:flex items-center gap-8 text-sm">
                   <div>
@@ -295,12 +243,8 @@ const ContactsDirectory = () => {
                     <p className="font-medium text-gray-900">{formatLastSeen(contact.lastSeen)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500 text-xs">Interactions</p>
-                    <p className="font-medium text-gray-900">{contact.totalInteractions}</p>
-                  </div>
-                  <div>
                     <p className="text-gray-500 text-xs">Frequency</p>
-                    <p className="font-medium text-gray-900">{contact.visitFrequency}</p>
+                    <p className="font-medium text-gray-900">{contact.visitFrequency || 'N/A'}</p>
                   </div>
                 </div>
                 <Eye className="h-5 w-5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
@@ -310,14 +254,20 @@ const ContactsDirectory = () => {
         </div>
       )}
 
-      {filteredContacts.length === 0 && (
+      {!loading && filteredContacts.length === 0 && (
         <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
           <p className="text-gray-500 text-lg">No contacts found matching your filters</p>
         </div>
       )}
 
       {/* Modals */}
-      {showAddModal && <AddContactModal isOpen={true} onClose={() => setShowAddModal(false)} />}
+      {showAddModal && (
+        <AddContactModal 
+          isOpen={true} 
+          onClose={() => setShowAddModal(false)}
+          onSave={handleAddContact} // Assuming AddContactModal accepts onSave
+        />
+      )}
       {showDetailModal && selectedContact && (
         <ContactDetailModal
           contact={selectedContact}
@@ -336,12 +286,7 @@ const ContactsDirectory = () => {
           isOpen={true}
           contact={selectedContact}
           onClose={() => setShowEditModal(false)}
-          onUpdate={(updatedContact) => {
-            setContacts(contacts.map(c => c.id === updatedContact.id ? updatedContact : c));
-            setShowEditModal(false);
-            // Optionally reopen detail modal or just stay on list
-            // For now, let's just close
-          }}
+          onUpdate={handleUpdateContact} // Assuming EditContactModal accepts onUpdate
         />
       )}
     </div>

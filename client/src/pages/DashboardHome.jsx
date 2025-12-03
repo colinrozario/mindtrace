@@ -1,50 +1,64 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Users, Bell, Calendar, TrendingUp, Activity, Plus, ArrowRight, AlertCircle } from 'lucide-react';
 import AddContactModal from '../components/AddContactModal';
 import AddReminderModal from '../components/AddReminderModal';
+import { interactionsApi, remindersApi, alertsApi } from '../services/api';
+import toast from 'react-hot-toast';
 
 const DashboardHome = () => {
   const navigate = useNavigate();
   const [isAddContactModalOpen, setIsAddContactModalOpen] = useState(false);
   const [isAddReminderModalOpen, setIsAddReminderModalOpen] = useState(false);
+  
+  const [recentInteractions, setRecentInteractions] = useState([]);
+  const [todayReminders, setTodayReminders] = useState([]);
+  const [stats, setStats] = useState({
+    visitors: 0,
+    conversations: 0,
+    unreadAlerts: 0,
+    upcomingReminders: 0
+  });
+  const [loading, setLoading] = useState(true);
 
-  const recentInteractions = [
-    {
-      name: 'Sarah Johnson',
-      relationship: 'Daughter',
-      time: '2 hours ago',
-      mood: 'happy',
-      summary: 'Discussed upcoming doctor appointment and medication changes.',
-      avatar: 'SJ',
-      bgColor: 'bg-indigo-500'
-    },
-    {
-      name: 'Dr. Michael Chen',
-      relationship: 'Doctor',
-      time: 'Yesterday',
-      mood: 'neutral',
-      summary: 'Routine check-up. Adjusted evening medication dosage.',
-      avatar: 'MC',
-      bgColor: 'bg-blue-500'
-    },
-    {
-      name: 'Tommy Johnson',
-      relationship: 'Grandson',
-      time: '3 days ago',
-      mood: 'happy',
-      summary: 'Tommy showed his school project about dinosaurs.',
-      avatar: 'TJ',
-      bgColor: 'bg-purple-500'
-    },
-  ];
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch Interactions
+        const interactionsRes = await interactionsApi.getAll({ limit: 3 });
+        setRecentInteractions(interactionsRes.data);
+        
+        // Fetch Reminders
+        const remindersRes = await remindersApi.getAll();
+        const reminders = remindersRes.data;
+        
+        // Filter for today's reminders (simple check for now, can be improved)
+        // Assuming reminders are daily for MVP or we just show all sorted by time
+        setTodayReminders(reminders.slice(0, 4));
+        
+        // Fetch Alerts for stats
+        const alertsRes = await alertsApi.getAll({ limit: 100 }); // Get enough to count unread
+        const unreadCount = alertsRes.data.filter(a => !a.read).length;
 
-  const todayReminders = [
-    { time: '9:00 AM', title: 'Morning Medication', type: 'medication', completed: true },
-    { time: '12:00 PM', title: 'Lunch with Maria', type: 'meal', completed: true },
-    { time: '2:00 PM', title: 'Physical Therapy', type: 'activity', completed: false },
-    { time: '6:00 PM', title: 'Evening Medication', type: 'medication', completed: false },
-  ];
+        setStats({
+          visitors: 4, // Placeholder for now as we don't have visitor tracking yet
+          conversations: interactionsRes.data.length, // Just using count of fetched for now
+          unreadAlerts: unreadCount,
+          upcomingReminders: reminders.filter(r => !r.completed).length
+        });
+
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+        toast.error("Failed to load dashboard data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const getMoodEmoji = (mood) => {
     const emojis = {
@@ -55,6 +69,20 @@ const DashboardHome = () => {
       confused: '😕',
     };
     return emojis[mood] || emojis.neutral;
+  };
+
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    
+    if (diffHours < 24) {
+      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    } else {
+      return date.toLocaleDateString();
+    }
   };
 
   return (
@@ -136,7 +164,7 @@ const DashboardHome = () => {
             </span>
           </div>
           <div>
-            <p className="text-3xl font-bold text-gray-900 mb-1">4</p>
+            <p className="text-3xl font-bold text-gray-900 mb-1">{stats.visitors}</p>
             <p className="text-sm text-gray-600">Visitors Today</p>
           </div>
         </div>
@@ -152,7 +180,7 @@ const DashboardHome = () => {
             </span>
           </div>
           <div>
-            <p className="text-3xl font-bold text-gray-900 mb-1">12</p>
+            <p className="text-3xl font-bold text-gray-900 mb-1">{stats.conversations}</p>
             <p className="text-sm text-gray-600">Conversations</p>
           </div>
         </div>
@@ -164,7 +192,7 @@ const DashboardHome = () => {
             </div>
           </div>
           <div>
-            <p className="text-3xl font-bold text-gray-900 mb-1">3</p>
+            <p className="text-3xl font-bold text-gray-900 mb-1">{stats.unreadAlerts}</p>
             <p className="text-sm text-gray-600">Unread Alerts</p>
           </div>
         </div>
@@ -176,7 +204,7 @@ const DashboardHome = () => {
             </div>
           </div>
           <div>
-            <p className="text-3xl font-bold text-gray-900 mb-1">6</p>
+            <p className="text-3xl font-bold text-gray-900 mb-1">{stats.upcomingReminders}</p>
             <p className="text-sm text-gray-600">Upcoming Reminders</p>
           </div>
         </div>
@@ -197,36 +225,42 @@ const DashboardHome = () => {
             </button>
           </div>
           <div className="divide-y divide-gray-100">
-            {recentInteractions.map((interaction, index) => (
-              <div
-                key={index}
-                className="p-6 hover:bg-gray-50 transition-colors cursor-pointer group"
-                onClick={() => navigate('/dashboard/interactions')}
-              >
-                <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-full ${interaction.bgColor} flex items-center justify-center text-white font-semibold shrink-0`}>
-                    {interaction.avatar}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                          {interaction.name}
-                        </h3>
-                        <p className="text-sm text-gray-500">{interaction.relationship}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">
-                          {getMoodEmoji(interaction.mood)}
-                        </span>
-                        <span className="text-sm text-gray-500">{interaction.time}</span>
-                      </div>
+            {recentInteractions.length > 0 ? (
+              recentInteractions.map((interaction, index) => (
+                <div
+                  key={index}
+                  className="p-6 hover:bg-gray-50 transition-colors cursor-pointer group"
+                  onClick={() => navigate('/dashboard/interactions')}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={`w-12 h-12 rounded-full bg-${interaction.contact_color || 'indigo'}-500 flex items-center justify-center text-white font-semibold shrink-0`}>
+                      {interaction.contact_avatar || interaction.contact_name?.substring(0, 2).toUpperCase() || '??'}
                     </div>
-                    <p className="text-sm text-gray-600 line-clamp-2">{interaction.summary}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                            {interaction.contact_name || 'Unknown'}
+                          </h3>
+                          <p className="text-sm text-gray-500">{interaction.contact_relationship || 'Contact'}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">
+                            {getMoodEmoji(interaction.mood)}
+                          </span>
+                          <span className="text-sm text-gray-500">{formatTime(interaction.timestamp)}</span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600 line-clamp-2">{interaction.summary}</p>
+                    </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="p-6 text-center text-gray-500">
+                No recent interactions found.
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -242,17 +276,23 @@ const DashboardHome = () => {
             </button>
           </div>
           <div className="divide-y divide-gray-100">
-            {todayReminders.map((reminder, index) => (
-              <div key={index} className="p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors">
-                <div className={`w-2 h-2 rounded-full ${reminder.completed ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium ${reminder.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
-                    {reminder.title}
-                  </p>
-                  <p className="text-xs text-gray-500">{reminder.time}</p>
+            {todayReminders.length > 0 ? (
+              todayReminders.map((reminder, index) => (
+                <div key={index} className="p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors">
+                  <div className={`w-2 h-2 rounded-full ${reminder.completed ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${reminder.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                      {reminder.title}
+                    </p>
+                    <p className="text-xs text-gray-500">{reminder.time}</p>
+                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="p-6 text-center text-gray-500">
+                No reminders for today.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

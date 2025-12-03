@@ -1,212 +1,286 @@
-import { useState } from 'react';
-import { Shield, Phone, Mail, MapPin, AlertCircle, Settings, Plus, X, GripVertical } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AlertCircle, Plus, Trash2, Shield, Phone, MessageSquare, Bell } from 'lucide-react';
+import { sosApi } from '../services/api';
+import toast from 'react-hot-toast';
 
 const SOSSettings = () => {
-  const [emergencyContacts, setEmergencyContacts] = useState([
-    { id: 1, name: 'Sarah Johnson', phone: '(555) 123-4567', email: 'sarah.j@email.com', relationship: 'Daughter', priority: 1 },
-    { id: 2, name: 'Dr. Michael Chen', phone: '(555) 234-5678', email: 'dr.chen@hospital.com', relationship: 'Doctor', priority: 2 },
-    { id: 3, name: 'Maria Garcia', phone: '(555) 345-6789', email: 'maria.g@care.com', relationship: 'Nurse', priority: 3 }
-  ]);
-
-  const [autoActions, setAutoActions] = useState({
-    sendSMS: true,
-    makeCall: true,
-    shareLocation: true,
-    recordAudio: false,
-    emailAlert: true,
-    alertServices: false
+  const [contacts, setContacts] = useState([]);
+  const [config, setConfig] = useState({
+    auto_call_emergency: false,
+    notify_all_contacts: true,
+    sound_alarm: true,
+    share_location: true
   });
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newContact, setNewContact] = useState({ name: '', phone: '', relationship: '' });
 
-  const [showAddContactModal, setShowAddContactModal] = useState(false);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [contactsRes, configRes] = await Promise.all([
+        sosApi.getContacts(),
+        sosApi.getConfig()
+      ]);
+      setContacts(contactsRes.data);
+      setConfig(configRes.data);
+    } catch (error) {
+      console.error("Error fetching SOS settings:", error);
+      toast.error("Failed to load SOS settings");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const testSOS = () => {
-    alert('SOS Test Mode:\n\nThis would:\n1. Send test SMS to emergency contacts\n2. Show test notification\n3. No actual emergency call made\n\nTest completed successfully!');
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleConfigChange = async (key) => {
+    const newConfig = { ...config, [key]: !config[key] };
+    // Optimistic update
+    setConfig(newConfig);
+    try {
+      await sosApi.updateConfig(newConfig);
+      toast.success("Settings updated");
+    } catch (error) {
+      console.error("Error updating config:", error);
+      toast.error("Failed to update settings");
+      // Revert on error
+      setConfig(config);
+    }
+  };
+
+  const handleAddContact = async (e) => {
+    e.preventDefault();
+    try {
+      await sosApi.createContact({ ...newContact, priority: contacts.length + 1 });
+      toast.success("Emergency contact added");
+      setShowAddModal(false);
+      setNewContact({ name: '', phone: '', relationship: '' });
+      fetchData();
+    } catch (error) {
+      console.error("Error adding contact:", error);
+      toast.error("Failed to add contact");
+    }
+  };
+
+  const handleDeleteContact = async (id) => {
+    if (window.confirm('Remove this emergency contact?')) {
+      try {
+        await sosApi.deleteContact(id);
+        setContacts(contacts.filter(c => c.id !== id));
+        toast.success("Contact removed");
+      } catch (error) {
+        console.error("Error deleting contact:", error);
+        toast.error("Failed to remove contact");
+      }
+    }
   };
 
   return (
     <div className="p-6 lg:p-8 max-w-[1600px] mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-          <Shield className="h-10 w-10 text-red-600" />
-          SOS / Emergency System
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+          SOS Settings
         </h1>
         <p className="text-lg text-gray-600">
-          Configure emergency response and contacts
+          Configure emergency protocols and contacts
         </p>
       </div>
 
-      {/* Status Card */}
-      <div className="bg-linear-to-br from-red-50 to-orange-50 border-2 border-red-200 rounded-2xl p-6 mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">System Status</h2>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-gray-700 font-medium">System Armed and Ready</span>
-            </div>
-          </div>
-          <button
-            onClick={testSOS}
-            className="px-6 py-3 bg-white border-2 border-gray-300 text-gray-900 rounded-xl font-medium hover:bg-gray-50 transition-all shadow-lg"
-          >
-            Test SOS
-          </button>
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6 mb-6">
+      <div className="grid lg:grid-cols-2 gap-8">
         {/* Emergency Contacts */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-              <Phone className="h-5 w-5" />
-              Emergency Contacts
-            </h2>
-            <button
-              onClick={() => setShowAddContactModal(true)}
-              className="p-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <Phone className="h-5 w-5 text-red-500" />
+                Emergency Contacts
+              </h2>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <Plus className="h-5 w-5 text-gray-700" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {loading ? (
+                <p className="text-gray-500 text-center py-4">Loading contacts...</p>
+              ) : contacts.length > 0 ? (
+                contacts.map((contact, index) => (
+                  <div key={contact.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{contact.name}</h3>
+                        <p className="text-sm text-gray-500">{contact.relationship} • {contact.phone}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteContact(contact.id)}
+                      className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 text-center py-4">No emergency contacts added</p>
+              )}
+            </div>
           </div>
 
-          <div className="space-y-3">
-            {emergencyContacts.map((contact) => (
-              <div
-                key={contact.id}
-                className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-gray-300 transition-all"
-              >
-                <GripVertical className="h-5 w-5 text-gray-400 cursor-move" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="bg-gray-900 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                      {contact.priority}
-                    </span>
-                    <h3 className="font-semibold text-gray-900">{contact.name}</h3>
+          {/* Add Contact Modal */}
+          {showAddModal && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Add Emergency Contact</h3>
+                <form onSubmit={handleAddContact} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={newContact.name}
+                      onChange={e => setNewContact({...newContact, name: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
                   </div>
-                  <p className="text-sm text-gray-600">{contact.relationship}</p>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <Phone className="h-3 w-3" />
-                      {contact.phone}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Mail className="h-3 w-3" />
-                      {contact.email}
-                    </span>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
+                    <input
+                      type="text"
+                      required
+                      value={newContact.relationship}
+                      onChange={e => setNewContact({...newContact, relationship: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
                   </div>
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      required
+                      value={newContact.phone}
+                      onChange={e => setNewContact({...newContact, phone: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                    >
+                      Add Contact
+                    </button>
+                  </div>
+                </form>
               </div>
-            ))}
-          </div>
-
-          <p className="text-xs text-gray-500 mt-4">
-            Drag to reorder priority. Contact #1 will be called first in emergency.
-          </p>
+            </div>
+          )}
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Automatic Actions
-          </h2>
-
-          <div className="space-y-4">
-            {Object.entries(autoActions).map(([key, value]) => {
-              const labels = {
-                sendSMS: 'Send SMS to all emergency contacts',
-                makeCall: 'Make automated call to primary contact',
-                shareLocation: 'Share live location',
-                recordAudio: 'Record audio/video',
-                emailAlert: 'Send email with details',
-                alertServices: 'Alert local emergency services'
-              };
-
-              return (
-                <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                  <span className="text-gray-900 font-medium">{labels[key]}</span>
-                  <button
-                    onClick={() => setAutoActions({ ...autoActions, [key]: !value })}
-                    className={`relative w-14 h-8 rounded-full transition-colors ${
-                      value ? 'bg-emerald-500' : 'bg-gray-300'
-                    }`}
-                  >
-                    <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform ${
-                      value ? 'translate-x-6' : ''
-                    }`} />
-                  </button>
+        {/* Automatic Actions */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+              <Shield className="h-5 w-5 text-indigo-500" />
+              Automatic Actions
+            </h2>
+            
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-red-50 rounded-lg">
+                    <Phone className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">Call Emergency Services</h3>
+                    <p className="text-sm text-gray-500">Automatically call 911 if no response from contacts</p>
+                  </div>
                 </div>
-              );
-            })}
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer"
+                    checked={config.auto_call_emergency}
+                    onChange={() => handleConfigChange('auto_call_emergency')}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <MessageSquare className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">Notify All Contacts</h3>
+                    <p className="text-sm text-gray-500">Send SMS alert to all emergency contacts</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer"
+                    checked={config.notify_all_contacts}
+                    onChange={() => handleConfigChange('notify_all_contacts')}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-yellow-50 rounded-lg">
+                    <Bell className="h-5 w-5 text-yellow-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">Sound Alarm</h3>
+                    <p className="text-sm text-gray-500">Play loud alarm on smart glasses</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer"
+                    checked={config.sound_alarm}
+                    onChange={() => handleConfigChange('sound_alarm')}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-red-50 rounded-2xl border border-red-100 p-6">
+            <div className="flex gap-4">
+              <AlertCircle className="h-6 w-6 text-red-600 shrink-0" />
+              <div>
+                <h3 className="font-semibold text-red-900 mb-1">Emergency Protocol</h3>
+                <p className="text-sm text-red-700 leading-relaxed">
+                  When SOS is triggered, the system will first attempt to contact the primary caregiver. 
+                  If no response within 60 seconds, it will proceed to notify all emergency contacts 
+                  and share the current location.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* SOS History */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">SOS History</h2>
-        <div className="text-center py-12">
-          <AlertCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No SOS events recorded</p>
-          <p className="text-sm text-gray-400 mt-2">Emergency activations will appear here</p>
-        </div>
-      </div>
-
-      {/* Add Contact Modal */}
-      {showAddContactModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">Add Emergency Contact</h2>
-              <button
-                onClick={() => setShowAddContactModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="h-6 w-6 text-gray-600" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <input
-                type="text"
-                placeholder="Full Name"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900"
-              />
-              <input
-                type="tel"
-                placeholder="Phone Number"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900"
-              />
-              <input
-                type="email"
-                placeholder="Email Address"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900"
-              />
-              <input
-                type="text"
-                placeholder="Relationship"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900"
-              />
-            </div>
-            <div className="p-6 border-t border-gray-200 flex gap-3">
-              <button
-                onClick={() => setShowAddContactModal(false)}
-                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowAddContactModal(false);
-                  alert('Emergency contact added!');
-                }}
-                className="flex-1 px-6 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800"
-              >
-                Add Contact
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -1,105 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Filter, Download, X, MapPin, Clock, Star } from 'lucide-react';
+import { interactionsApi } from '../services/api';
+import toast from 'react-hot-toast';
 
 const InteractionHistory = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMood, setSelectedMood] = useState('all');
   const [selectedInteraction, setSelectedInteraction] = useState(null);
   const [starredOnly, setStarredOnly] = useState(false);
+  
+  const [interactions, setInteractions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const interactions = [
-    {
-      id: 1,
-      name: 'Sarah Johnson',
-      relationship: 'Daughter',
-      avatar: 'SJ',
-      color: 'indigo',
-      photo: null,
-      summary: 'Discussed upcoming doctor appointment and medication changes. Sarah mentioned planning a family dinner next weekend and asked about dietary preferences.',
-      keyTopics: ['doctor appointment', 'medication', 'family dinner'],
-      mood: 'happy',
-      timestamp: '2025-12-03T10:30:00',
-      duration: '15 minutes',
-      location: 'Living Room',
-      starred: true,
-      fullDetails: 'Sarah visited in the morning and had a detailed conversation about the upcoming doctor\'s appointment scheduled for next Tuesday. She discussed the recent changes to the evening medication dosage as recommended by Dr. Chen. The conversation was warm and positive, with Sarah sharing plans for a family dinner next weekend. She asked about food preferences and dietary restrictions to consider for the meal planning.'
-    },
-    {
-      id: 2,
-      name: 'Dr. Michael Chen',
-      relationship: 'Doctor',
-      avatar: 'MC',
-      color: 'blue',
-      photo: null,
-      summary: 'Routine check-up. Discussed memory exercises and adjusted evening medication dosage. Scheduled follow-up for two weeks.',
-      keyTopics: ['health check', 'medication', 'memory exercises', 'follow-up'],
-      mood: 'neutral',
-      timestamp: '2025-12-02T14:00:00',
-      duration: '30 minutes',
-      location: 'Medical Office',
-      starred: false,
-      fullDetails: 'Dr. Chen conducted a comprehensive routine check-up. He reviewed recent cognitive function and was pleased with the progress. Discussed implementing new memory exercises and adjusted the evening medication dosage to optimize effectiveness. Scheduled a follow-up appointment for two weeks to monitor the medication changes.'
-    },
-    {
-      id: 3,
-      name: 'Tommy Johnson',
-      relationship: 'Grandson',
-      avatar: 'TJ',
-      color: 'purple',
-      photo: null,
-      summary: 'Tommy showed his school project about dinosaurs. Very enthusiastic conversation about T-Rex facts and fossil discoveries.',
-      keyTopics: ['school project', 'dinosaurs', 'T-Rex', 'learning'],
-      mood: 'happy',
-      timestamp: '2025-11-30T16:45:00',
-      duration: '25 minutes',
-      location: 'Living Room',
-      starred: true,
-      fullDetails: 'Tommy visited after school and was incredibly excited to share his science project about dinosaurs. He brought visual aids and spent time explaining his research on T-Rex anatomy and behavior. The conversation was filled with energy and enthusiasm. Tommy demonstrated excellent knowledge retention and showed his presentation skills. He asked many questions about what dinosaurs might have looked like and shared interesting facts about fossil discoveries.'
-    },
-    {
-      id: 4,
-      name: 'Maria Garcia',
-      relationship: 'Nurse',
-      avatar: 'MG',
-      color: 'emerald',
-      photo: null,
-      summary: 'Morning routine check. Took vitals, administered medication, and helped with breakfast preparation.',
-      keyTopics: ['morning routine', 'vitals', 'medication', 'breakfast'],
-      mood: 'neutral',
-      timestamp: '2025-12-03T08:00:00',
-      duration: '45 minutes',
-      location: 'Home',
-      starred: false,
-      fullDetails: 'Maria arrived for the morning shift and conducted the standard morning routine. She checked blood pressure (120/80), temperature (98.6°F), and pulse (72 bpm) - all within normal ranges. Administered morning medications and assisted with breakfast preparation. Discussed the day\'s schedule and confirmed upcoming appointments.'
-    },
-    {
-      id: 5,
-      name: 'Robert Miller',
-      relationship: 'Friend',
-      avatar: 'RM',
-      color: 'yellow',
-      photo: null,
-      summary: 'Weekly chess game. Discussed old memories from the neighborhood and upcoming community events.',
-      keyTopics: ['chess', 'memories', 'community', 'friendship'],
-      mood: 'happy',
-      timestamp: '2025-11-28T14:00:00',
-      duration: '1 hour 20 minutes',
-      location: 'Living Room',
-      starred: false,
-      fullDetails: 'Robert came over for their weekly Thursday chess game. They played two games, with Robert winning the first and a draw in the second. The conversation flowed naturally between moves, reminiscing about old times in the neighborhood and friends from the past. Robert shared information about upcoming community events and invited to join for a community picnic next month.'
+  const fetchInteractions = async () => {
+    try {
+      setLoading(true);
+      const params = {
+        search: searchQuery,
+        mood: selectedMood !== 'all' ? selectedMood : undefined,
+        starred: starredOnly ? true : undefined
+      };
+      const response = await interactionsApi.getAll(params);
+      setInteractions(response.data);
+    } catch (error) {
+      console.error("Error fetching interactions:", error);
+      toast.error("Failed to load interactions");
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const filteredInteractions = interactions.filter(interaction => {
-    const matchesSearch = interaction.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      interaction.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      interaction.keyTopics.some(topic => topic.toLowerCase().includes(searchQuery.toLowerCase()));
+  useEffect(() => {
+    // Debounce search
+    const timer = setTimeout(() => {
+      fetchInteractions();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedMood, starredOnly]);
 
-    const matchesMood = selectedMood === 'all' || interaction.mood === selectedMood;
-    const matchesStarred = !starredOnly || interaction.starred;
-
-    return matchesSearch && matchesMood && matchesStarred;
-  });
+  const handleToggleStar = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await interactionsApi.toggleStar(id);
+      // Optimistic update or refetch
+      setInteractions(interactions.map(i => 
+        i.id === id ? { ...i, starred: !i.starred } : i
+      ));
+      if (selectedInteraction && selectedInteraction.id === id) {
+        setSelectedInteraction({ ...selectedInteraction, starred: !selectedInteraction.starred });
+      }
+    } catch (error) {
+      console.error("Error toggling star:", error);
+      toast.error("Failed to update interaction");
+    }
+  };
 
   const getMoodColor = (mood) => {
     const colors = {
@@ -217,7 +171,11 @@ const InteractionHistory = () => {
 
       {/* Interactions Timeline */}
       <div className="space-y-4">
-        {filteredInteractions.map((interaction) => (
+        {loading ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Loading interactions...</p>
+          </div>
+        ) : interactions.map((interaction) => (
           <div
             key={interaction.id}
             className="bg-white rounded-2xl border border-gray-200 overflow-hidden
@@ -227,8 +185,8 @@ const InteractionHistory = () => {
             <div className="p-6">
               <div className="flex items-start gap-4">
                 {/* Avatar */}
-                <div className={`w-14 h-14 rounded-full bg-linear-to-br from-${interaction.color}-400 to-${interaction.color}-600 flex items-center justify-center text-white font-semibold text-lg shrink-0`}>
-                  {interaction.avatar}
+                <div className={`w-14 h-14 rounded-full bg-${interaction.contact_color || 'indigo'}-500 flex items-center justify-center text-white font-semibold text-lg shrink-0`}>
+                  {interaction.contact_avatar || interaction.contact_name?.substring(0, 2).toUpperCase() || '??'}
                 </div>
 
                 {/* Content */}
@@ -236,16 +194,13 @@ const InteractionHistory = () => {
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                        {interaction.name}
+                        {interaction.contact_name || 'Unknown'}
                       </h3>
-                      <p className="text-sm text-gray-500">{interaction.relationship}</p>
+                      <p className="text-sm text-gray-500">{interaction.contact_relationship || 'Contact'}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Toggle starred
-                        }}
+                        onClick={(e) => handleToggleStar(e, interaction.id)}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                       >
                         <Star className={`h-5 w-5 ${interaction.starred ? 'fill-yellow-500 text-yellow-500' : 'text-gray-400'}`} />
@@ -258,7 +213,7 @@ const InteractionHistory = () => {
 
                   {/* Tags */}
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {interaction.keyTopics.map((topic, index) => (
+                    {interaction.key_topics && interaction.key_topics.map((topic, index) => (
                       <span
                         key={index}
                         className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg"
@@ -277,7 +232,7 @@ const InteractionHistory = () => {
                       <Clock className="h-4 w-4" />
                       {formatTimestamp(interaction.timestamp)}
                     </div>
-                    <div>Duration: {interaction.duration}</div>
+                    {interaction.duration && <div>Duration: {interaction.duration}</div>}
                     {interaction.location && (
                       <div className="flex items-center gap-1">
                         <MapPin className="h-4 w-4" />
@@ -291,7 +246,7 @@ const InteractionHistory = () => {
           </div>
         ))}
 
-        {filteredInteractions.length === 0 && (
+        {!loading && interactions.length === 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
             <p className="text-gray-500 text-lg">No interactions found matching your filters</p>
           </div>
@@ -304,12 +259,12 @@ const InteractionHistory = () => {
           <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-full bg-linear-to-br from-${selectedInteraction.color}-400 to-${selectedInteraction.color}-600 flex items-center justify-center text-white font-semibold text-lg`}>
-                  {selectedInteraction.avatar}
+                <div className={`w-14 h-14 rounded-full bg-${selectedInteraction.contact_color || 'indigo'}-500 flex items-center justify-center text-white font-semibold text-lg`}>
+                  {selectedInteraction.contact_avatar || selectedInteraction.contact_name?.substring(0, 2).toUpperCase() || '??'}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">{selectedInteraction.name}</h2>
-                  <p className="text-gray-500">{selectedInteraction.relationship}</p>
+                  <h2 className="text-2xl font-bold text-gray-900">{selectedInteraction.contact_name || 'Unknown'}</h2>
+                  <p className="text-gray-500">{selectedInteraction.contact_relationship || 'Contact'}</p>
                 </div>
               </div>
               <button
@@ -331,11 +286,11 @@ const InteractionHistory = () => {
                 </div>
                 <div className="bg-gray-50 rounded-xl p-4">
                   <p className="text-xs text-gray-500 mb-1">Duration</p>
-                  <p className="font-semibold text-gray-900">{selectedInteraction.duration}</p>
+                  <p className="font-semibold text-gray-900">{selectedInteraction.duration || 'N/A'}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-4">
                   <p className="text-xs text-gray-500 mb-1">Location</p>
-                  <p className="font-semibold text-gray-900">{selectedInteraction.location}</p>
+                  <p className="font-semibold text-gray-900">{selectedInteraction.location || 'Unknown'}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-4">
                   <p className="text-xs text-gray-500 mb-1">Emotional Tone</p>
@@ -349,7 +304,7 @@ const InteractionHistory = () => {
               <div className="mb-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Key Topics</h3>
                 <div className="flex flex-wrap gap-2">
-                  {selectedInteraction.keyTopics.map((topic, index) => (
+                  {selectedInteraction.key_topics && selectedInteraction.key_topics.map((topic, index) => (
                     <span
                       key={index}
                       className="px-3 py-2 bg-indigo-100 text-indigo-700 text-sm font-medium rounded-lg"
@@ -363,7 +318,7 @@ const InteractionHistory = () => {
               {/* Full Details */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Full Conversation Summary</h3>
-                <p className="text-gray-700 leading-relaxed">{selectedInteraction.fullDetails}</p>
+                <p className="text-gray-700 leading-relaxed">{selectedInteraction.full_details || selectedInteraction.summary}</p>
               </div>
             </div>
 
