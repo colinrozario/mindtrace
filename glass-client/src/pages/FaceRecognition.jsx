@@ -76,6 +76,8 @@ const FaceRecognition = () => {
         formData.append('file', file);
 
         try {
+            // Note: This uses the legacy /face/register endpoint
+            // For database integration, use the main client's Contacts page instead
             const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/face/register`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });

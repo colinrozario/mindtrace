@@ -36,6 +36,7 @@ class Contact(Base):
     visit_frequency = Column(String, nullable=True)
     last_seen = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, default=True)
+    profile_photo = Column(String, nullable=True) # Path to profile photo for face recognition
     
     user = sa_relationship("User", back_populates="contacts")
 

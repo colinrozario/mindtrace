@@ -4,6 +4,10 @@ import cv2
 import numpy as np
 import json
 import os
+import sys
+
+# Add parent directory to path to import from app
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Define paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -123,8 +127,65 @@ def recognize_face(app, image, threshold=0.45):
     if best_score < threshold:
         return {"name": "Unknown", "relation": "Unknown", "confidence": float(best_score)}
 
-    return {
+    result = {
         "name": best_match["name"],
         "relation": best_match["relation"],
         "confidence": float(best_score)
     }
+    
+    # Include contact_id if available
+    if "contact_id" in best_match:
+        result["contact_id"] = best_match["contact_id"]
+    
+    return result
+
+def sync_embeddings_from_db(app, db_session):
+    """
+    Sync face embeddings from database contacts with profile photos.
+    This replaces the embeddings.json with data from the database.
+    """
+    from app.models import Contact
+    
+    # Get all contacts with profile photos
+    contacts = db_session.query(Contact).filter(
+        Contact.profile_photo.isnot(None),
+        Contact.is_active == True
+    ).all()
+    
+    embeddings_db = []
+    
+    for contact in contacts:
+        if not contact.profile_photo or not os.path.exists(contact.profile_photo):
+            print(f"Warning: Photo not found for {contact.name}: {contact.profile_photo}")
+            continue
+            
+        # Read and process the image
+        img = cv2.imread(contact.profile_photo)
+        if img is None:
+            print(f"Error: Could not read image for {contact.name}")
+            continue
+        
+        # Extract embedding
+        data = detect_and_embed(app, img)
+        if not data:
+            print(f"Error: No face detected for {contact.name}")
+            continue
+        
+        # Add to embeddings database
+        embeddings_db.append({
+            "name": contact.name,
+            "relation": contact.relationship_detail or contact.relationship,
+            "embedding": data["embedding"],
+            "contact_id": contact.id
+        })
+    
+    # Save to embeddings.json
+    os.makedirs(PROFILES_DIR, exist_ok=True)
+    try:
+        with open(EMBEDDINGS_FILE, "w") as f:
+            json.dump(embeddings_db, f, indent=4)
+        print(f"Successfully synced {len(embeddings_db)} face embeddings from database")
+        return {"success": True, "count": len(embeddings_db)}
+    except Exception as e:
+        print(f"Error saving embeddings: {e}")
+        return {"success": False, "error": str(e)}

@@ -1,10 +1,14 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 import shutil
 import os
 import cv2
 import numpy as np
-from ai_engine.face_engine import load_models, register_profile, recognize_face
+from ai_engine.face_engine import load_models, register_profile, recognize_face, sync_embeddings_from_db
+from ..database import get_db
+from ..models import Contact, User
+from ..utils.auth import get_current_user
 
 router = APIRouter()
 
@@ -46,7 +50,10 @@ async def register_face(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/recognize")
-async def recognize_face_endpoint(file: UploadFile = File(...)):
+async def recognize_face_endpoint(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
     try:
         # Read image directly from memory
         contents = await file.read()
@@ -58,6 +65,17 @@ async def recognize_face_endpoint(file: UploadFile = File(...)):
 
         result = recognize_face(face_app, img)
         
+        # If a contact is recognized, update their last_seen timestamp
+        # Note: This works without authentication for glass-client compatibility
+        if result and result.get("name") != "Unknown" and "contact_id" in result:
+            contact = db.query(Contact).filter(
+                Contact.id == result["contact_id"]
+            ).first()
+            if contact:
+                from datetime import datetime
+                contact.last_seen = datetime.now()
+                db.commit()
+        
         if result:
             return JSONResponse(content=result, status_code=200)
         else:
@@ -65,4 +83,31 @@ async def recognize_face_endpoint(file: UploadFile = File(...)):
 
     except Exception as e:
         print(f"Error in recognize_face_endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/sync-from-database")
+async def sync_faces_from_database(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Sync face embeddings from database contacts.
+    This will rebuild the embeddings.json file from all contacts with profile photos.
+    """
+    try:
+        result = sync_embeddings_from_db(face_app, db)
+        
+        if result.get("success"):
+            return JSONResponse(
+                content={
+                    "message": f"Successfully synced {result['count']} face embeddings from database",
+                    "count": result["count"]
+                },
+                status_code=200
+            )
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
+            
+    except Exception as e:
+        print(f"Error in sync_faces_from_database: {e}")
         raise HTTPException(status_code=500, detail=str(e))

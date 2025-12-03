@@ -33,21 +33,41 @@ const AddContactModal = ({ isOpen, onClose, onSave, navigateAfterSave = false })
     setIsSubmitting(true);
     
     try {
-      // Prepare data for API (exclude photos for now as they need special handling)
-      const contactData = {
-        name: formData.name,
-        relationship: formData.relationship,
-        relationship_detail: formData.relationship_detail,
-        notes: formData.notes,
-        phone_number: formData.phone_number,
-        email: formData.email,
-        visit_frequency: formData.visit_frequency,
-        avatar: formData.name.substring(0, 2).toUpperCase(), // Use initials as avatar
-        color: 'indigo'
-      };
+      let response;
       
-      const response = await contactsApi.create(contactData);
-      toast.success('Contact added successfully!');
+      // If photos are provided, use the with-photo endpoint
+      if (formData.photos.length > 0) {
+        const formDataToSend = new FormData();
+        formDataToSend.append('name', formData.name);
+        formDataToSend.append('relationship', formData.relationship);
+        if (formData.relationship_detail) formDataToSend.append('relationship_detail', formData.relationship_detail);
+        if (formData.notes) formDataToSend.append('notes', formData.notes);
+        if (formData.phone_number) formDataToSend.append('phone_number', formData.phone_number);
+        if (formData.email) formDataToSend.append('email', formData.email);
+        if (formData.visit_frequency) formDataToSend.append('visit_frequency', formData.visit_frequency);
+        
+        // Use the first photo for face recognition
+        formDataToSend.append('photo', formData.photos[0]);
+        
+        response = await contactsApi.createWithPhoto(formDataToSend);
+        toast.success('Contact added with face recognition!');
+      } else {
+        // No photos, use regular endpoint
+        const contactData = {
+          name: formData.name,
+          relationship: formData.relationship,
+          relationship_detail: formData.relationship_detail,
+          notes: formData.notes,
+          phone_number: formData.phone_number,
+          email: formData.email,
+          visit_frequency: formData.visit_frequency,
+          avatar: formData.name.substring(0, 2).toUpperCase(),
+          color: 'indigo'
+        };
+        
+        response = await contactsApi.create(contactData);
+        toast.success('Contact added successfully!');
+      }
       
       if (onSave) {
         onSave(response.data);

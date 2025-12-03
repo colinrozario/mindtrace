@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Search, Grid, List, Plus, Eye } from 'lucide-react';
+import { Search, Grid, List, Plus, Eye, RefreshCw } from 'lucide-react';
 import AddContactModal from '../components/AddContactModal';
 import ContactDetailModal from '../components/ContactDetailModal';
 import EditContactModal from '../components/EditContactModal';
-import { contactsApi } from '../services/api';
+import { contactsApi, faceApi } from '../services/api';
 import toast from 'react-hot-toast';
 
 const ContactsDirectory = () => {
@@ -17,6 +17,7 @@ const ContactsDirectory = () => {
   
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchContacts = async () => {
     try {
@@ -43,6 +44,19 @@ const ContactsDirectory = () => {
   const handleUpdateContact = () => {
     // Refresh the contacts list after updating
     fetchContacts();
+  };
+
+  const handleSyncFaces = async () => {
+    try {
+      setSyncing(true);
+      const response = await faceApi.syncFromDatabase();
+      toast.success(response.data.message || 'Face recognition database synced!');
+    } catch (error) {
+      console.error("Error syncing faces:", error);
+      toast.error("Failed to sync face recognition database");
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const relationshipTypes = [
@@ -95,14 +109,25 @@ const ContactsDirectory = () => {
             Manage people in the recognition database
           </p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-6 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800
-            transition-all duration-200 flex items-center gap-2 shadow-lg"
-        >
-          <Plus className="h-5 w-5" />
-          Add Contact
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={handleSyncFaces}
+            disabled={syncing}
+            className="px-6 py-3 bg-white border-2 border-gray-900 text-gray-900 rounded-xl font-medium hover:bg-gray-50
+              transition-all duration-200 flex items-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Sync Faces'}
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-6 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800
+              transition-all duration-200 flex items-center gap-2 shadow-lg"
+          >
+            <Plus className="h-5 w-5" />
+            Add Contact
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

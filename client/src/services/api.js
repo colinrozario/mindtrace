@@ -23,8 +23,22 @@ export const contactsApi = {
   getAll: () => api.get('/contacts/'),
   get: (id) => api.get(`/contacts/${id}`),
   create: (data) => api.post('/contacts/', data),
+  createWithPhoto: (formData) => api.post('/contacts/with-photo', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }),
   update: (id, data) => api.put(`/contacts/${id}`, data),
   delete: (id) => api.delete(`/contacts/${id}`),
+};
+
+export const faceApi = {
+  syncFromDatabase: () => api.post('/face/sync-from-database'),
+  recognize: (formData) => api.post('/face/recognize', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }),
 };
 
 export const interactionsApi = {
