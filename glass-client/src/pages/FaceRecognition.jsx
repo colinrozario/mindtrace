@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { Camera, Upload, UserPlus, ScanFace, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -16,7 +16,6 @@ const FaceRecognition = () => {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const [recognitionResult, setRecognitionResult] = useState(null);
-    const [isRecognizing, setIsRecognizing] = useState(false);
     const intervalRef = useRef(null);
 
     // Start Camera
@@ -77,7 +76,7 @@ const FaceRecognition = () => {
         formData.append('file', file);
 
         try {
-            const response = await axios.post('http://localhost:8000/face/register', formData, {
+            const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/face/register`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             setRegStatus({ type: 'success', message: `Successfully registered ${response.data.name}!` });
@@ -126,7 +125,7 @@ const FaceRecognition = () => {
             formData.append('file', blob, 'frame.jpg');
 
             try {
-                const response = await axios.post('http://localhost:8000/face/recognize', formData);
+                const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/face/recognize`, formData);
                 setRecognitionResult(response.data);
             } catch (err) {
                 console.error("Recognition error", err);
