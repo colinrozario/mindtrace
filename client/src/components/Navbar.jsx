@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Menu, X, ChevronRight } from 'lucide-react';
 import gsap from 'gsap';
+import { useNavigate } from 'react-router';
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -8,8 +9,8 @@ const Navbar = () => {
   const menuRef = useRef(null);
   const menuItemsRef = useRef([]);
   const menuOverlayRef = useRef(null);
+  const navigate = useNavigate();
 
-  // Handle scroll effect
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
@@ -98,7 +99,7 @@ const Navbar = () => {
           <div className="flex items-center justify-between">
             {/* Logo */}
             <a href="#" className="flex items-center gap-2 group z-50 relative">
-              <span className={`font-bold text-xl tracking-tight transition-colors duration-300 ${
+              <span className={`font-bold text-2xl tracking-tight transition-colors duration-300 ${
                 isMenuOpen ? 'text-gray-900' : 'text-gray-900'
               }`}>
                 MindTrace
@@ -112,13 +113,13 @@ const Navbar = () => {
                   <a 
                     key={link.name}
                     href={link.href}
-                    className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                    className="text-md font-medium text-gray-600 hover:text-gray-900 transition-colors relative after:content-[''] after:absolute after:left-0 after:-bottom-1 after:w-full after:h-0.5 after:bg-gray-900 after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:duration-300 after:origin-left"
                   >
                     {link.name}
                   </a>
                 ))}
               </div>
-              <button className="bg-gray-900 text-white px-6 py-2.5 rounded-full text-sm font-medium hover:bg-gray-800 transition-all hover:shadow-lg hover:scale-105 active:scale-95">
+              <button onClick={() => navigate('/login')} className="bg-gray-900 text-white px-6 py-2.5 rounded-full text-md font-medium hover:bg-gray-800 transition-all hover:shadow-lg hover:scale-105 active:scale-95 duration-300">
                 Get Started
               </button>
             </div>

@@ -1,23 +1,19 @@
-import React, { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Brain, Mic, Eye, Shield, Clock, Zap, Heart, Users, Lock, Smartphone } from 'lucide-react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useNavigate } from 'react-router';
 
 gsap.registerPlugin(ScrollTrigger);
 
 const Landing = () => {
   const mainRef = useRef(null);
+  const navigate = useNavigate();
 
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
-      
-      gsap.from('.hero-cta', {
-        y: 20,
-        opacity: 0,
-        duration: 0.5,
-      });
       
       gsap.from('.hero-title', {
         y: 50,
@@ -135,19 +131,19 @@ const Landing = () => {
   }, []);
 
   return (
-    <div ref={mainRef} className="min-h-screen bg-white">
+    <div ref={mainRef} className="min-h-screen bg-white overflow-x-hidden">
       <Navbar />
 
       {/* Hero Section */}
       <section id="overview" className="pt-32 pb-20 px-6 lg:px-8">
         <div className="max-w-5xl mx-auto text-center">
-          <h1 className="hero-title text-6xl md:text-7xl lg:text-8xl font-bold text-gray-900 mb-8 tracking-tight leading-[1.1]">
+          <h1 className="hero-title text-4xl md:text-7xl lg:text-8xl font-bold text-gray-900 mb-8 tracking-tight leading-[1.1]">
             A new species of<br />smart glasses.
           </h1>
           <p className="hero-description text-xl md:text-2xl text-gray-600 mb-12 max-w-3xl mx-auto leading-relaxed">
             MindTrace integrates seamlessly with your Ray-Ban Meta to whisper names, reminders, and context directly into your ear.
           </p>
-          <button className="bg-gray-900 text-white px-10 py-4 rounded-full hover:bg-gray-800 transition-all duration-300 font-medium text-lg shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 animate-slideInUp">
+          <button onClick={() => navigate('/login')} className="bg-gray-900 text-white px-10 py-4 rounded-full hover:bg-gray-800 transition-all duration-300 font-medium text-lg shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 animate-slideInUp">
             Join the Waitlist
           </button>
         </div>
@@ -156,7 +152,7 @@ const Landing = () => {
       {/* Product Image Section */}
       <section className="py-20 px-6 lg:px-8 bg-gray-50">
         <div className="max-w-6xl mx-auto">
-          <div className="product-showcase relative aspect-video rounded-3xl overflow-hidden shadow-2xl group cursor-default">
+          <div className="product-showcase relative aspect-square md:aspect-video rounded-3xl overflow-hidden shadow-2xl group cursor-default">
             {/* Background Image with Zoom Effect */}
             <img 
               src="https://images.unsplash.com/photo-1592478411213-6153e4ebc07d?q=80&w=2912&auto=format&fit=crop" 
