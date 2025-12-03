@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import User
 
-load_dotenv()
+load_dotenv(override=True)
 
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-should-be-in-env")
 ALGORITHM = "HS256"

@@ -5,6 +5,7 @@ import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import AuthCallback from './pages/AuthCallback'
 
 import DashboardLayout from './components/DashboardLayout'
@@ -29,6 +30,7 @@ const App = () => {
         <Route path='/login' element={<PublicRoute><Login /></PublicRoute>} />
         <Route path='/signup' element={<PublicRoute><Signup /></PublicRoute>} />
         <Route path='/forgot-password' element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+        <Route path='/reset-password' element={<PublicRoute><ResetPassword /></PublicRoute>} />
         <Route path='/auth/callback' element={<AuthCallback />} />
 
         {/* Dashboard parent route */}

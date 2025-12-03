@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Force reload environment variables
+load_dotenv(override=True)
 
 import uvicorn
 from app.app import app
