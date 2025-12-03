@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
@@ -15,6 +15,15 @@ router = APIRouter(
     tags=["contacts"],
     responses={404: {"description": "Not found"}},
 )
+
+def get_photo_url(profile_photo: Optional[str], request: Request) -> Optional[str]:
+    """Convert file path to URL"""
+    if not profile_photo or not os.path.exists(profile_photo):
+        return None
+    
+    filename = os.path.basename(profile_photo)
+    base_url = str(request.base_url).rstrip('/')
+    return f"{base_url}/static/photos/{filename}"
 
 # Pydantic models
 class ContactBase(BaseModel):
@@ -40,19 +49,29 @@ class ContactResponse(ContactBase):
     user_id: int
     last_seen: Optional[datetime] = None
     is_active: bool
+    profile_photo_url: Optional[str] = None
     
     class Config:
         from_attributes = True
 
 @router.get("/", response_model=List[ContactResponse])
 def get_contacts(
+    request: Request,
     skip: int = 0, 
     limit: int = 100, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     contacts = db.query(Contact).filter(Contact.user_id == current_user.id, Contact.is_active == True).offset(skip).limit(limit).all()
-    return contacts
+    
+    # Add photo URLs
+    result = []
+    for contact in contacts:
+        contact_dict = ContactResponse.from_orm(contact).dict()
+        contact_dict['profile_photo_url'] = get_photo_url(contact.profile_photo, request)
+        result.append(contact_dict)
+    
+    return result
 
 @router.post("/", response_model=ContactResponse)
 def create_contact(
@@ -68,6 +87,7 @@ def create_contact(
 
 @router.post("/with-photo", response_model=ContactResponse)
 async def create_contact_with_photo(
+    request: Request,
     name: str = Form(...),
     relationship: str = Form(...),
     relationship_detail: Optional[str] = Form(None),
@@ -114,7 +134,9 @@ async def create_contact_with_photo(
         db.commit()
         db.refresh(db_contact)
         
-        return db_contact
+        contact_dict = ContactResponse.from_orm(db_contact).dict()
+        contact_dict['profile_photo_url'] = get_photo_url(db_contact.profile_photo, request)
+        return contact_dict
         
     except Exception as e:
         print(f"Error creating contact with photo: {e}")
@@ -122,14 +144,18 @@ async def create_contact_with_photo(
 
 @router.get("/{contact_id}", response_model=ContactResponse)
 def get_contact(
-    contact_id: int, 
+    contact_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     contact = db.query(Contact).filter(Contact.id == contact_id, Contact.user_id == current_user.id).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
-    return contact
+    
+    contact_dict = ContactResponse.from_orm(contact).dict()
+    contact_dict['profile_photo_url'] = get_photo_url(contact.profile_photo, request)
+    return contact_dict
 
 @router.put("/{contact_id}", response_model=ContactResponse)
 def update_contact(

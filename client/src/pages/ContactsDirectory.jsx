@@ -204,9 +204,17 @@ const ContactsDirectory = () => {
                 transition-all duration-300 cursor-pointer group"
             >
               <div className="flex flex-col items-center text-center mb-4">
-                <div className={`w-20 h-20 rounded-full bg-${contact.color || 'indigo'}-500 flex items-center justify-center text-white font-semibold text-2xl mb-4`}>
-                  {contact.avatar || contact.name.substring(0, 2).toUpperCase()}
-                </div>
+                {contact.profile_photo_url ? (
+                  <img 
+                    src={contact.profile_photo_url} 
+                    alt={contact.name}
+                    className="w-20 h-20 rounded-full object-cover mb-4"
+                  />
+                ) : (
+                  <div className={`w-20 h-20 rounded-full bg-${contact.color || 'indigo'}-500 flex items-center justify-center text-white font-semibold text-2xl mb-4`}>
+                    {contact.avatar || contact.name.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
                   {contact.name}
                 </h3>
@@ -241,9 +249,17 @@ const ContactsDirectory = () => {
                 transition-all duration-300 cursor-pointer group"
             >
               <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-full bg-${contact.color || 'indigo'}-500 flex items-center justify-center text-white font-semibold text-lg shrink-0`}>
-                  {contact.avatar || contact.name.substring(0, 2).toUpperCase()}
-                </div>
+                {contact.profile_photo_url ? (
+                  <img 
+                    src={contact.profile_photo_url} 
+                    alt={contact.name}
+                    className="w-14 h-14 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <div className={`w-14 h-14 rounded-full bg-${contact.color || 'indigo'}-500 flex items-center justify-center text-white font-semibold text-lg shrink-0`}>
+                    {contact.avatar || contact.name.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
                     {contact.name}

@@ -6,6 +6,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from .database import Base, engine
@@ -45,6 +46,12 @@ app.add_middleware(
 )
 
 app.add_middleware(SessionMiddleware,secret_key=SECRET_KEY)
+
+# Mount static files for profile photos
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PHOTOS_DIR = os.path.join(BASE_DIR, "ai_engine", "profiles", "images")
+os.makedirs(PHOTOS_DIR, exist_ok=True)
+app.mount("/static/photos", StaticFiles(directory=PHOTOS_DIR), name="photos")
 
 app.include_router(auth_router)
 app.include_router(face_router, prefix="/face", tags=["Face Recognition"])
