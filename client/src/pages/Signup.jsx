@@ -12,15 +12,13 @@ const Signup = () => {
 
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
-      // Image animation
       gsap.from(imageRef.current, {
-        x: -50, // Coming from left
+        x: -50,
         opacity: 0,
         duration: 1.2,
         ease: 'power3.out'
       });
 
-      // Form animation
       gsap.from(formRef.current.children, {
         y: 30,
         opacity: 0,
@@ -57,7 +55,7 @@ const Signup = () => {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-24">
         <div ref={formRef} className="w-full max-w-md space-y-8">
           <div className="text-center lg:text-left">
-            <p onClick={() => navigate('/')} className="cursor-pointer inline-block text-2xl font-bold text-gray-900 mb-2">MindTrace</p>
+            <p onClick={() => navigate('/')} className="cursor-pointer inline-block text-4xl font-bold text-gray-900 mb-2">MindTrace</p>
             <h1 className="text-3xl font-bold text-gray-900 mt-4">Create your account</h1>
             <p className="text-gray-600 mt-2">
               Already have an account?{' '}

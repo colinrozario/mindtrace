@@ -57,7 +57,7 @@ const Login = () => {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-24">
         <div ref={formRef} className="w-full max-w-md space-y-8">
           <div className="text-center lg:text-left">
-            <p onClick={() => navigate('/')} className="inline-block text-4xl font-bold text-gray-900 mb-2 cursor-pointer">MindTrace</p>
+            <p onClick={() => navigate('/')} className="cursor-pointer inline-block text-4xl font-bold text-gray-900 mb-2">MindTrace</p>
             <h1 className="text-3xl font-bold text-gray-900 mt-4">Sign in to your account</h1>
             <p className="text-gray-600 mt-2">
               Don't have an account?{' '}
