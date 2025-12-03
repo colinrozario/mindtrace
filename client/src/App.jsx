@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import ForgotPassword from './pages/ForgotPassword'
 import AuthCallback from './pages/AuthCallback'
 
 import DashboardLayout from './components/DashboardLayout'
@@ -27,11 +28,12 @@ const App = () => {
 
         <Route path='/login' element={<PublicRoute><Login /></PublicRoute>} />
         <Route path='/signup' element={<PublicRoute><Signup /></PublicRoute>} />
+        <Route path='/forgot-password' element={<PublicRoute><ForgotPassword /></PublicRoute>} />
         <Route path='/auth/callback' element={<AuthCallback />} />
 
         {/* Dashboard parent route */}
-        <Route 
-          path='/dashboard' 
+        <Route
+          path='/dashboard'
           element={
             <ProtectedRoute>
               <DashboardLayout />

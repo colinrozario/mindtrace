@@ -27,24 +27,23 @@ const Navbar = () => {
     { name: 'Overview', href: '#overview' },
     { name: 'Features', href: '#features' },
     { name: 'Specs', href: '#support' },
+    { name: 'FAQ', href: '#faq' },
   ];
 
   return (
     <>
-      <nav 
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 py-6 ${
-          scrolled || isMenuOpen 
-            ? 'bg-white/50 backdrop-blur-md' 
-            : 'bg-transparent'
-        }`}
+      <nav
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 py-6 ${scrolled || isMenuOpen
+          ? 'bg-white/50 backdrop-blur-md'
+          : 'bg-transparent'
+          }`}
       >
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex items-center justify-between">
             {/* Logo */}
             <a href="#" className="flex items-center gap-2 group z-50 relative">
-              <span className={`font-bold text-2xl tracking-tight transition-colors duration-300 ${
-                isMenuOpen ? 'text-gray-900' : 'text-gray-900'
-              }`}>
+              <span className={`font-bold text-2xl tracking-tight transition-colors duration-300 ${isMenuOpen ? 'text-gray-900' : 'text-gray-900'
+                }`}>
                 MindTrace
               </span>
             </a>
@@ -53,7 +52,7 @@ const Navbar = () => {
             <div className="hidden md:flex items-center gap-8">
               <div className="flex items-center gap-6">
                 {navLinks.map((link) => (
-                  <a 
+                  <a
                     key={link.name}
                     href={link.href}
                     className="text-md font-medium text-gray-600 hover:text-gray-900 transition-colors relative after:content-[''] after:absolute after:left-0 after:-bottom-1 after:w-full after:h-0.5 after:bg-gray-900 after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:duration-300 after:origin-left"
@@ -68,7 +67,7 @@ const Navbar = () => {
             </div>
 
             {/* Mobile Menu Button */}
-            <button 
+            <button
               className="md:hidden relative z-50 p-2 -mr-2 text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               aria-label="Toggle menu"
@@ -80,23 +79,21 @@ const Navbar = () => {
       </nav>
 
       {/* Mobile Menu Overlay */}
-      <div 
-        className={`fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300 ${
-          isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
+      <div
+        className={`fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300 ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
         onClick={() => setIsMenuOpen(false)}
       />
 
       {/* Mobile Menu Sidebar */}
-      <div 
-        className={`fixed top-0 right-0 bottom-0 w-[80%] max-w-sm bg-white z-40 shadow-2xl transform md:hidden flex flex-col transition-transform duration-500 ease-out ${
-          isMenuOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+      <div
+        className={`fixed top-0 right-0 bottom-0 w-[80%] max-w-sm bg-white z-40 shadow-2xl transform md:hidden flex flex-col transition-transform duration-500 ease-out ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         <div className="flex-1 px-8 pt-28 pb-8 flex flex-col gap-8">
           <div className="flex flex-col gap-6">
-            {navLinks.map((link, index) => (
-              <a 
+            {navLinks.map((link) => (
+              <a
                 key={link.name}
                 href={link.href}
                 onClick={() => setIsMenuOpen(false)}
