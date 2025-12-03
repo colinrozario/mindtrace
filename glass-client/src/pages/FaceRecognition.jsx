@@ -77,7 +77,7 @@ const FaceRecognition = () => {
         formData.append('file', file);
 
         try {
-            const response = await axios.post('http://localhost:8000/api/face/register', formData, {
+            const response = await axios.post('http://localhost:8000/face/register', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             setRegStatus({ type: 'success', message: `Successfully registered ${response.data.name}!` });
@@ -126,7 +126,7 @@ const FaceRecognition = () => {
             formData.append('file', blob, 'frame.jpg');
 
             try {
-                const response = await axios.post('http://localhost:8000/api/face/recognize', formData);
+                const response = await axios.post('http://localhost:8000/face/recognize', formData);
                 setRecognitionResult(response.data);
             } catch (err) {
                 console.error("Recognition error", err);
