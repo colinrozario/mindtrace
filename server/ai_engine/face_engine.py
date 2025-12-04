@@ -9,7 +9,6 @@ import sys
 # Add parent directory to path to import from app
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Define paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROFILES_DIR = os.path.join(BASE_DIR, "profiles")
 EMBEDDINGS_FILE = os.path.join(PROFILES_DIR, "embeddings.json")
