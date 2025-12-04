@@ -144,16 +144,21 @@ const ChatWindow = ({
             <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-4 bg-gray-50 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded">
                 {messages.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-5 py-10 text-gray-500">
-                        <div className="text-5xl mb-4">💬</div>
+                        <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-gray-900 to-gray-800 flex items-center justify-center mb-4 shadow-lg">
+                            <img src="/logo.png" alt="MindTrace" className="w-8 h-8 object-contain" />
+                        </div>
                         <h3 className="text-lg font-semibold text-gray-900 m-0 mb-2">Start a conversation</h3>
-                        <p className="text-sm m-0 mb-6 max-w-[280px]">Ask me anything about your contacts, reminders, or get help with the dashboard.</p>
+                        <p className="text-sm m-0 mb-8 max-w-[300px] text-gray-600">Ask me anything about your contacts, reminders, or get help with the dashboard.</p>
 
                         {/* Quick actions for empty state */}
-                        <QuickActions
-                            actions={quickActions}
-                            onAction={onSendMessage}
-                            disabled={isLoading}
-                        />
+                        <div className="w-full max-w-[340px]">
+                            <QuickActions
+                                actions={quickActions}
+                                onAction={onSendMessage}
+                                disabled={isLoading}
+                                hasMessages={false}
+                            />
+                        </div>
                     </div>
                 ) : (
                     <>
@@ -178,12 +183,13 @@ const ChatWindow = ({
             </div>
 
             {/* Quick actions when there are messages */}
-            {messages.length > 0 && !isLoading && (
-                <div className="px-4 py-3 border-t border-gray-200 bg-white">
+            {messages.length > 0 && !isLoading && quickActions.length > 0 && (
+                <div className="px-5 py-4 border-t border-gray-200 bg-linear-to-b from-gray-50 to-white">
                     <QuickActions
-                        actions={quickActions.slice(0, 3)}
+                        actions={quickActions}
                         onAction={onSendMessage}
                         disabled={isLoading}
+                        hasMessages={true}
                     />
                 </div>
             )}

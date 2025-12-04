@@ -39,12 +39,15 @@ def detect_and_embed(app, image):
         return []
     
     results = []
-    for face in faces:
+    for idx, face in enumerate(faces):
+        bbox = face.bbox.tolist()
+        print(f"DEBUG: Face {idx} bbox: {bbox}")
         results.append({
             "embedding": face.embedding.tolist(),
-            "bbox": face.bbox.tolist()
+            "bbox": bbox
         })
     
+    print(f"DEBUG: Returning {len(results)} face embeddings")
     return results
 
 # Removed register_profile function - profiles are now only registered through database contacts
@@ -58,6 +61,38 @@ def cosine_similarity(a, b):
         return 0.0
     return np.dot(a, b) / (norm_a * norm_b)
 
+# Cache for embeddings with file modification time tracking
+_embeddings_cache = {
+    "profiles": [],
+    "mtime": 0
+}
+
+def load_embeddings_with_cache():
+    """
+    Load embeddings from file with caching based on file modification time.
+    This ensures we always use fresh data when the file is updated.
+    """
+    global _embeddings_cache
+    
+    try:
+        if os.path.exists(EMBEDDINGS_FILE):
+            current_mtime = os.path.getmtime(EMBEDDINGS_FILE)
+            
+            # Only reload if file has been modified
+            if current_mtime != _embeddings_cache["mtime"]:
+                with open(EMBEDDINGS_FILE, "r") as f:
+                    profiles = json.load(f)
+                _embeddings_cache["profiles"] = profiles
+                _embeddings_cache["mtime"] = current_mtime
+                print(f"DEBUG: Reloaded {len(profiles)} embeddings from file (mtime: {current_mtime})")
+            
+            return _embeddings_cache["profiles"]
+        else:
+            return []
+    except Exception as e:
+        print(f"Error loading embeddings: {e}")
+        return []
+
 def recognize_face(app, image, threshold=0.45):
     """
     Compare input face embeddings to stored embeddings using cosine similarity.
@@ -65,41 +100,44 @@ def recognize_face(app, image, threshold=0.45):
     """
     # Get embedding and bbox for all faces
     detected_faces = detect_and_embed(app, image)
+    print(f"DEBUG: recognize_face - Processing {len(detected_faces)} detected faces")
+    
     if not detected_faces:
         return []
 
-    # Load stored profiles
-    try:
-        if os.path.exists(EMBEDDINGS_FILE):
-            with open(EMBEDDINGS_FILE, "r") as f:
-                profiles = json.load(f)
-        else:
-            profiles = []
-    except:
-        profiles = []
+    # Load stored profiles with caching
+    profiles = load_embeddings_with_cache()
+    
+    if not profiles:
+        print("DEBUG: No profiles loaded - all faces will be marked as Unknown")
+    else:
+        print(f"DEBUG: Loaded {len(profiles)} profiles for comparison")
 
     results = []
 
-    for face_data in detected_faces:
+    for idx, face_data in enumerate(detected_faces):
         current_emb = face_data["embedding"]
         current_bbox = face_data["bbox"]
 
         best_match = None
         best_score = -1
 
+        # Compare against all stored profiles
         for profile in profiles:
             score = cosine_similarity(current_emb, profile["embedding"])
             if score > best_score:
                 best_score = score
                 best_match = profile
 
-        if best_score < threshold:
-            results.append({
+        if best_score < threshold or best_match is None:
+            result = {
                 "name": "Unknown", 
                 "relation": "Unknown", 
-                "confidence": float(best_score),
+                "confidence": float(best_score) if best_score > 0 else 0.0,
                 "bbox": current_bbox
-            })
+            }
+            print(f"DEBUG: Face {idx} -> Unknown (score: {best_score:.3f})")
+            results.append(result)
         else:
             match_result = {
                 "name": best_match["name"],
@@ -111,8 +149,10 @@ def recognize_face(app, image, threshold=0.45):
             if "contact_id" in best_match:
                 match_result["contact_id"] = best_match["contact_id"]
             
+            print(f"DEBUG: Face {idx} -> {best_match['name']} (score: {best_score:.3f})")
             results.append(match_result)
     
+    print(f"DEBUG: recognize_face - Returning {len(results)} results")
     return results
 
 def sync_embeddings_from_db(app, db_session):
@@ -164,7 +204,14 @@ def sync_embeddings_from_db(app, db_session):
     try:
         with open(EMBEDDINGS_FILE, "w") as f:
             json.dump(embeddings_db, f, indent=4)
+        
+        # Force cache invalidation by updating the global cache
+        global _embeddings_cache
+        _embeddings_cache["profiles"] = embeddings_db
+        _embeddings_cache["mtime"] = os.path.getmtime(EMBEDDINGS_FILE)
+        
         print(f"Successfully synced {len(embeddings_db)} face embeddings from database")
+        print(f"Cache updated with {len(embeddings_db)} profiles")
         return {"success": True, "count": len(embeddings_db)}
     except Exception as e:
         print(f"Error saving embeddings: {e}")

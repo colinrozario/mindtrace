@@ -94,6 +94,7 @@ const FaceRecognition = () => {
     };
 
     const timeoutRef = useRef(null);
+    const lastResultRef = useRef(null);
 
     const startRecognitionLoop = () => {
         if (intervalRef.current) clearInterval(intervalRef.current);
@@ -127,7 +128,6 @@ const FaceRecognition = () => {
             formData.append('file', blob, 'frame.jpg');
 
             try {
-                // setDebugStatus("Sending..."); // Optional: might flicker too much
                 const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/face/recognize`, formData);
                 const data = response.data;
 
@@ -137,35 +137,56 @@ const FaceRecognition = () => {
                 // Filter out nulls/undefined, but KEEP "Unknown" faces
                 const validResults = results.filter(r => r);
 
-                setDebugStatus(`OK: ${validResults.length} faces (Raw: ${results.length})`);
+                // Process results to add positioning
+                const processedResults = validResults.map((result, idx) => {
+                    if (result.bbox) {
+                        const position = calculatePosition(result.bbox);
+                        return {
+                            ...result,
+                            position: position
+                        };
+                    }
+                    return result;
+                });
 
-                if (validResults.length > 0) {
-                    const processedResults = validResults.map(result => {
-                        if (result.bbox) {
-                            return {
-                                ...result,
-                                position: calculatePosition(result.bbox)
-                            };
-                        }
-                        return result;
-                    });
-
-                    // Clear any pending timeout to hide the result
-                    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
+                if (processedResults.length > 0) {
+                    // Faces detected: Update immediately and reset persistence
                     setRecognitionResult(processedResults);
-
-                    // Set a new timeout to clear the result if no new detection occurs
-                    timeoutRef.current = setTimeout(() => {
-                        setRecognitionResult([]);
+                    lastResultRef.current = processedResults;
+                    
+                    // Clear any pending timeout since we have a valid result
+                    if (timeoutRef.current) {
+                        clearTimeout(timeoutRef.current);
                         timeoutRef.current = null;
-                    }, 2000);
+                    }
+                    
+                    setDebugStatus(`OK: ${processedResults.length} faces`);
+                } else {
+                    // No faces detected: Check if we should persist the last result
+                    if (lastResultRef.current && !timeoutRef.current) {
+                        // Start the grace period timer if not already running
+                        timeoutRef.current = setTimeout(() => {
+                            setRecognitionResult([]);
+                            lastResultRef.current = null;
+                            timeoutRef.current = null;
+                            setDebugStatus("Cleared (Timeout)");
+                        }, 1000); // 1 second grace period
+                        
+                        setDebugStatus("Persisting (Grace Period)");
+                    } else if (!lastResultRef.current) {
+                        // No previous result to persist
+                         setRecognitionResult([]);
+                         setDebugStatus("No Faces");
+                    }
                 }
+
             } catch (err) {
                 console.error("Recognition error", err);
                 setDebugStatus(`Err: ${err.message}`);
+                // On error, we might want to keep persisting for a bit too, but for now let's be safe
+                // and only clear if we really lost tracking
             }
-        }, 200); // Increased frequency for smoother tracking (5fps)
+        }, 150);
     };
 
     useEffect(() => {

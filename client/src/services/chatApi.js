@@ -59,7 +59,7 @@ export const sendMessage = async ({ message, conversationId, context = {} }) => 
     lastMessageTime = Date.now();
 
     try {
-        const response = await api.post('/chat/', {
+        const response = await api.post('/chat/message', {
             message,
             conversation_id: conversationId,
             context,

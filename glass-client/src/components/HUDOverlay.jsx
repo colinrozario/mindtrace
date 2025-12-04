@@ -10,16 +10,20 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus }) => {
     }, []);
 
     // Helper to get style for tracking tag
-    const getTagStyle = (position) => {
+    const getTagStyle = (position, index) => {
         if (!position) return {};
 
         const { left, top, width, height } = position;
 
+        // Add vertical offset for multiple faces to prevent overlap
+        const verticalOffset = index * 20; // Stagger tags vertically
+
         return {
             position: 'absolute',
             left: `${left + width + 40}px`, // Increased offset for larger tag
-            top: `${top}px`,
-            transition: 'all 0.15s ease-out' // Smoother transition to reduce jitter
+            top: `${top + verticalOffset}px`,
+            transition: 'all 0.15s ease-out', // Smoother transition to reduce jitter
+            zIndex: 1000 + index // Ensure proper stacking
         };
     };
 
@@ -61,10 +65,29 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus }) => {
                     </div>
                 </div>
 
+                {/* Bounding Boxes for all detected faces */}
+                {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.map((result, index) => (
+                    result.position && (
+                        <div 
+                            key={`bbox-${result.name}-${result.confidence}-${index}`}
+                            style={{
+                                position: 'absolute',
+                                left: `${result.position.left}px`,
+                                top: `${result.position.top}px`,
+                                width: `${result.position.width}px`,
+                                height: `${result.position.height}px`,
+                                border: '2px solid rgba(99, 102, 241, 0.8)',
+                                boxShadow: '0 0 20px rgba(99, 102, 241, 0.5)',
+                                pointerEvents: 'none'
+                            }}
+                        />
+                    )
+                ))}
+
                 {/* Tracking Tags */}
                 {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.map((result, index) => (
                     result.position && (
-                        <div key={index} style={getTagStyle(result.position)}>
+                        <div key={`tag-${result.name}-${result.confidence}-${index}`} style={getTagStyle(result.position, index)}>
                             <TagContent result={result} />
                         </div>
                     )
@@ -99,10 +122,29 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus }) => {
                 <div className="w-2 h-2 bg-white rounded-full shadow-lg" />
             </div>
 
+            {/* Bounding Boxes for all detected faces */}
+            {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.map((result, index) => (
+                result.position && (
+                    <div 
+                        key={`bbox-${result.name}-${result.confidence}-${index}`}
+                        style={{
+                            position: 'absolute',
+                            left: `${result.position.left}px`,
+                            top: `${result.position.top}px`,
+                            width: `${result.position.width}px`,
+                            height: `${result.position.height}px`,
+                            border: '2px solid rgba(255, 255, 255, 0.5)',
+                            boxShadow: '0 0 20px rgba(255, 255, 255, 0.3)',
+                            pointerEvents: 'none'
+                        }}
+                    />
+                )
+            ))}
+
             {/* Tracking Tags - Minimal for Ray-Ban */}
             {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.map((result, index) => (
                 result.position && (
-                    <div key={index} style={getTagStyle(result.position)}>
+                    <div key={`tag-${result.name}-${result.confidence}-${index}`} style={getTagStyle(result.position, index)}>
                         <div className="bg-white/10 backdrop-blur-xl p-4 rounded-2xl border border-white/20 text-white shadow-2xl">
                             <div className="text-2xl font-bold">{result.name}</div>
                             <div className="text-base font-medium opacity-80">{result.relation}</div>

@@ -35,9 +35,16 @@ async def recognize_face_endpoint(
              print("DEBUG: Failed to decode image in recognize_face_endpoint")
              raise HTTPException(status_code=400, detail="Invalid image data")
 
-        print("DEBUG: Calling recognize_face")
         result = recognize_face(face_app, img)
-        print(f"DEBUG: recognize_face result: {result}")
+        
+        # Log recognition results for debugging
+        if result:
+            names = [r.get("name", "Unknown") for r in result]
+            confidences = [f"{r.get('confidence', 0):.2f}" for r in result]
+            print(f"DEBUG: API Response - Recognized {len(result)} face(s): {', '.join([f'{n} ({c})' for n, c in zip(names, confidences)])}")
+            print(f"DEBUG: Full result structure: {result}")
+        else:
+            print("DEBUG: No faces detected in frame - returning empty array")
         
         # If contacts are recognized, update their last_seen timestamp
         if result:
@@ -55,6 +62,8 @@ async def recognize_face_endpoint(
 
     except Exception as e:
         print(f"Error in recognize_face_endpoint: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/sync-from-database")

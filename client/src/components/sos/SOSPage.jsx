@@ -3,15 +3,14 @@
  * Main SOS Alert Dashboard page
  */
 
-import { useEffect } from 'react';
-import { Shield, Bell } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Shield } from 'lucide-react';
 
 // Components
 import SOSMap from './SOSMap';
 import SOSQuickInfo from './SOSQuickInfo';
 import SOSAlertPanel from './SOSAlertPanel';
 import SOSAlertHistory from './SOSAlertHistory';
-import SOSTestControls from './SOSTestControls';
 import SOSNotificationBanner from './SOSNotificationBanner';
 
 // Hooks
@@ -19,13 +18,14 @@ import useSOSAlerts from '../../hooks/useSOSAlerts';
 import useLocationTracking from '../../hooks/useLocationTracking';
 import useNotifications from '../../hooks/useNotifications';
 
-// Config
-import {
-    DEFAULT_WEARER_PROFILE,
-    DEFAULT_EMERGENCY_CONTACTS
-} from '../../constants/sosConfig';
+// Services
+import { userApi, sosApi } from '../../services/api';
 
 const SOSPage = () => {
+    const [wearerProfile, setWearerProfile] = useState(null);
+    const [emergencyContacts, setEmergencyContacts] = useState([]);
+    const [profileLoading, setProfileLoading] = useState(true);
+
     // SOS Alert state
     const {
         activeAlert,
@@ -49,6 +49,47 @@ const SOSPage = () => {
         getTimeSinceUpdate
     } = useLocationTracking({ enablePolling: true, pollInterval: 3000 });
 
+    // Fetch user profile and emergency contacts
+    useEffect(() => {
+        const fetchProfileData = async () => {
+            try {
+                const [profileRes, contactsRes] = await Promise.all([
+                    userApi.getProfile(),
+                    sosApi.getContacts()
+                ]);
+
+                setWearerProfile({
+                    id: profileRes.data.id,
+                    name: profileRes.data.full_name || 'User',
+                    photoUrl: profileRes.data.profile_image,
+                    medicalNotes: 'Medical information not available',
+                    batteryLevel: batteryLevel,
+                    connectionStatus: connectionStatus,
+                    lastSeen: new Date().toISOString()
+                });
+
+                // Set emergency contacts from database (empty array if none)
+                setEmergencyContacts(contactsRes.data || []);
+            } catch (error) {
+                console.error('Failed to fetch profile data:', error);
+                // Use default profile if fetch fails
+                setWearerProfile({
+                    id: 'user',
+                    name: 'User',
+                    photoUrl: null,
+                    medicalNotes: 'Medical information not available',
+                    batteryLevel: batteryLevel,
+                    connectionStatus: connectionStatus,
+                    lastSeen: new Date().toISOString()
+                });
+            } finally {
+                setProfileLoading(false);
+            }
+        };
+
+        fetchProfileData();
+    }, [batteryLevel, connectionStatus]);
+
     // Notifications
     const {
         preferences,
@@ -56,28 +97,20 @@ const SOSPage = () => {
         bannerMessage,
         togglePreference,
         hideNotificationBanner,
-        triggerSOSNotification,
-        playTestSound
+        triggerSOSNotification
     } = useNotifications();
 
-    // Handle SOS simulation
-    const handleSimulateSOS = async () => {
-        const alert = await triggerAlert({ isTest: true });
-        if (alert) {
-            triggerSOSNotification(
-                `SOS Alert received at ${alert.location?.address || 'Unknown location'}`,
-                alert.location
-            );
-        }
-    };
+    // Auto-update alert location when current location changes (real-time tracking)
+    useEffect(() => {
+        if (activeAlert && currentLocation) {
+            // Update the alert location in real-time
+            const updateTimer = setTimeout(() => {
+                updateAlertLocation(currentLocation);
+            }, 5000); // Update every 5 seconds
 
-    // Handle random location
-    const handleRandomLocation = () => {
-        const newLocation = setRandomLocation();
-        if (activeAlert) {
-            updateAlertLocation(newLocation);
+            return () => clearTimeout(updateTimer);
         }
-    };
+    }, [activeAlert, currentLocation, updateAlertLocation]);
 
     // Handle resolve
     const handleResolve = (alertId, resolvedBy, notes) => {
@@ -98,7 +131,7 @@ const SOSPage = () => {
 
     const status = getOverallStatus();
 
-    if (isLoading) {
+    if (isLoading || profileLoading) {
         return (
             <div className="p-6 lg:p-8 flex items-center justify-center min-h-[400px]">
                 <div className="flex flex-col items-center">
@@ -159,8 +192,8 @@ const SOSPage = () => {
                 {/* Quick Info Sidebar */}
                 <div className="lg:col-span-1">
                     <SOSQuickInfo
-                        wearer={DEFAULT_WEARER_PROFILE}
-                        contacts={DEFAULT_EMERGENCY_CONTACTS}
+                        wearer={wearerProfile}
+                        contacts={emergencyContacts}
                         batteryLevel={batteryLevel}
                         connectionStatus={connectionStatus}
                         lastSeen={getTimeSinceUpdate()}
@@ -176,19 +209,7 @@ const SOSPage = () => {
                     onResolve={handleResolve}
                     onAcknowledge={acknowledgeAlert}
                     isTestMode={isTestMode}
-                />
-            </div>
-
-            {/* Test Controls */}
-            <div className="mb-6">
-                <SOSTestControls
-                    onSimulateSOS={handleSimulateSOS}
-                    onRandomLocation={handleRandomLocation}
-                    onClearHistory={clearHistory}
-                    onTestSound={playTestSound}
-                    isAlertActive={!!activeAlert}
-                    soundEnabled={preferences.sound}
-                    onToggleSound={() => togglePreference('sound')}
+                    contacts={emergencyContacts}
                 />
             </div>
 

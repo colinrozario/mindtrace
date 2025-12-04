@@ -1,5 +1,5 @@
 /**
- * @fileoverview Individual chat message component with markdown rendering.
+ * @fileoverview Individual chat message component with plain text rendering.
  */
 
 import { useMemo } from 'react';
@@ -7,33 +7,20 @@ import { User, AlertCircle } from 'lucide-react';
 import TypingIndicator from './TypingIndicator';
 
 /**
- * Simple markdown parser for basic formatting.
- * Supports: **bold**, *italic*, `code`, ```code blocks```, links, and line breaks.
- * @param {string} text - The text to parse
- * @returns {string} HTML string
+ * Simple text formatter that preserves line breaks and escapes HTML.
+ * @param {string} text - The text to format
+ * @returns {string} HTML string with line breaks
  */
-const parseMarkdown = (text) => {
+const formatPlainText = (text) => {
     if (!text) return '';
 
-    let html = text
+    return text
         // Escape HTML entities
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        // Code blocks (must be before inline code)
-        .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre class="chat-code-block"><code>$2</code></pre>')
-        // Inline code
-        .replace(/`([^`]+)`/g, '<code class="chat-inline-code">$1</code>')
-        // Bold
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        // Italic
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-        // Links
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-        // Line breaks
+        // Preserve line breaks
         .replace(/\n/g, '<br />');
-
-    return html;
 };
 
 /**
@@ -46,12 +33,12 @@ const ChatMessage = ({ message }) => {
     const isUser = message.role === 'user';
     const isError = message.isError;
 
-    // Parse markdown content
+    // Format plain text content
     const htmlContent = useMemo(() => {
         if (message.isStreaming && !message.content) {
             return null; // Will show typing indicator
         }
-        return parseMarkdown(message.content);
+        return formatPlainText(message.content);
     }, [message.content, message.isStreaming]);
 
     // Format timestamp
@@ -94,7 +81,7 @@ const ChatMessage = ({ message }) => {
                         <TypingIndicator />
                     ) : (
                         <div
-                            className="[&_a]:underline [&_strong]:font-semibold [&_code]:bg-black/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono [&_code]:text-[13px] [&_pre]:bg-black/10 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-2 [&_pre_code]:font-mono [&_pre_code]:text-[13px] [&_pre_code]:whitespace-pre-wrap"
+                            className="whitespace-pre-wrap wrap-break-word"
                             dangerouslySetInnerHTML={{ __html: htmlContent }}
                         />
                     )}

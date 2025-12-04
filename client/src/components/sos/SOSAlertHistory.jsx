@@ -50,7 +50,7 @@ const calculateDuration = (start, end) => {
  */
 const AlertHistoryItem = ({ alert, isExpanded, onToggle }) => {
     const { date, time } = formatDateTime(alert.timestamp);
-    const duration = calculateDuration(alert.timestamp, alert.resolvedAt);
+    const duration = calculateDuration(alert.timestamp, alert.resolved_at);
 
     return (
         <div className="border border-gray-200 rounded-xl overflow-hidden bg-white hover:border-gray-300 transition-colors">
@@ -76,7 +76,7 @@ const AlertHistoryItem = ({ alert, isExpanded, onToggle }) => {
                         <span className="font-semibold text-gray-900">{date}</span>
                         <span className="text-gray-400">•</span>
                         <span className="text-sm text-gray-600">{time}</span>
-                        {alert.isTest && (
+                        {alert.is_test && (
                             <span className="px-1.5 py-0.5 bg-purple-100 text-purple-600 text-xs font-medium rounded">
                                 TEST
                             </span>
@@ -114,12 +114,12 @@ const AlertHistoryItem = ({ alert, isExpanded, onToggle }) => {
                         </div>
 
                         {/* Resolution */}
-                        {alert.resolvedBy && (
+                        {alert.resolved_by && (
                             <div className="flex items-start gap-2">
                                 <User className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
                                 <div>
                                     <p className="text-xs text-gray-500 uppercase tracking-wider">Resolved By</p>
-                                    <p className="text-sm text-gray-700">{alert.resolvedBy}</p>
+                                    <p className="text-sm text-gray-700">{alert.resolved_by}</p>
                                 </div>
                             </div>
                         )}

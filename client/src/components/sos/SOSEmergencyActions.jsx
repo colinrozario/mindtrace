@@ -1,8 +1,3 @@
-/**
- * SOSEmergencyActions Component
- * Quick action buttons for emergency response
- */
-
 import { CheckCircle, Phone, Navigation, PhoneCall, AlertTriangle } from 'lucide-react';
 import { getDirectionsUrl } from '../../utils/geocoding';
 
@@ -19,7 +14,8 @@ const SOSEmergencyActions = ({
     location,
     onResolve,
     onAcknowledge,
-    isTest = false
+    isTest = false,
+    contacts = []
 }) => {
     const handleCallEmergency = () => {
         // In production, this would call local emergency services
@@ -114,6 +110,23 @@ const SOSEmergencyActions = ({
                     <PhoneCall className="h-5 w-5 text-blue-600" />
                     <span className="text-xs font-medium text-blue-700">Call Wearer</span>
                 </button>
+
+                {contacts.map((contact) => (
+                    <a
+                        key={contact.id}
+                        href={`tel:${contact.phone}`}
+                        className="flex flex-col items-center gap-1.5 p-3 
+                bg-emerald-50 hover:bg-emerald-100 border border-emerald-200
+                rounded-xl transition-all
+                focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2"
+                        aria-label={`Call ${contact.name}`}
+                    >
+                        <PhoneCall className="h-5 w-5 text-emerald-600" />
+                        <span className="text-xs font-medium text-emerald-700 truncate w-full text-center">
+                            {contact.name.split(' ')[0]}
+                        </span>
+                    </a>
+                ))}
 
                 <button
                     onClick={handleGetDirections}

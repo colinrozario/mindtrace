@@ -32,7 +32,8 @@ const SOSAlertPanel = ({
     activeAlert,
     onResolve,
     onAcknowledge,
-    isTestMode = false
+    isTestMode = false,
+    contacts = []
 }) => {
     // No active alert - show safe state
     if (!activeAlert) {
@@ -83,6 +84,12 @@ const SOSAlertPanel = ({
                             </span>
                         )}
                     </div>
+                    
+                    {activeAlert.wearer_name && (
+                        <p className="text-sm text-amber-700 mt-1">
+                            From: <span className="font-semibold">{activeAlert.wearer_name}</span>
+                        </p>
+                    )}
 
                     <div className="flex items-center gap-3 mt-2 text-amber-700 flex-wrap">
                         <div className="flex items-center gap-1.5">
@@ -123,6 +130,7 @@ const SOSAlertPanel = ({
                 onResolve={onResolve}
                 onAcknowledge={onAcknowledge}
                 isTest={isTestMode}
+                contacts={contacts}
             />
         </div>
     );

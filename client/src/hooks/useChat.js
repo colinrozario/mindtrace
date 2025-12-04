@@ -155,7 +155,7 @@ export const useChat = (options = {}) => {
                 });
 
                 const assistantMessage = createMessage(
-                    response.content || response.message || 'No response received.',
+                    response.response || response.content || response.message || 'No response received.',
                     'assistant',
                     { id: response.id || generateId() }
                 );

@@ -19,6 +19,21 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Add a response interceptor to handle token expiration
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid - clear storage and redirect to login
+      localStorage.removeItem('token');
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const contactsApi = {
   getAll: () => api.get('/contacts/'),
   get: (id) => api.get(`/contacts/${id}`),
@@ -70,6 +85,13 @@ export const sosApi = {
   deleteContact: (id) => api.delete(`/sos/contacts/${id}`),
   getConfig: () => api.get('/sos/config'),
   updateConfig: (data) => api.put('/sos/config', data),
+  
+  // SOS Alerts
+  createAlert: (data) => api.post('/sos/alerts', data),
+  getAlerts: (params) => api.get('/sos/alerts', { params }),
+  getActiveAlert: () => api.get('/sos/alerts/active'),
+  updateAlert: (id, data) => api.put(`/sos/alerts/${id}`, data),
+  clearHistory: () => api.delete('/sos/alerts/history'),
 };
 
 export const userApi = {

@@ -1,280 +1,327 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, Plus, Trash2, Shield, Phone, MessageSquare, Bell } from 'lucide-react';
-import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
+import { Shield, Plus, Phone, Mail, Trash2, Save, AlertCircle, CheckCircle, User } from 'lucide-react';
 import { sosApi } from '../services/api';
 import toast from 'react-hot-toast';
 
 const SOSSettings = () => {
   const [contacts, setContacts] = useState([]);
   const [config, setConfig] = useState({
-    auto_call_emergency: false,
-    notify_all_contacts: true,
-    sound_alarm: true,
-    share_location: true
+    send_sms: true,
+    make_call: true,
+    share_location: true,
+    record_audio: false,
+    email_alert: true,
+    alert_services: false,
   });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newContact, setNewContact] = useState({ name: '', phone: '', relationship: '' });
-  const [deleteModal, setDeleteModal] = useState({ isOpen: false, contactId: null, contactName: '' });
+  const [editingContact, setEditingContact] = useState(null);
+  const [newContact, setNewContact] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    relationship: '',
+    priority: 1,
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       const [contactsRes, configRes] = await Promise.all([
         sosApi.getContacts(),
-        sosApi.getConfig()
+        sosApi.getConfig(),
       ]);
-      setContacts(contactsRes.data);
-      setConfig(configRes.data);
+      setContacts(contactsRes.data || []);
+      setConfig(configRes.data || config);
     } catch (error) {
-      console.error("Error fetching SOS settings:", error);
-      toast.error("Failed to load SOS settings");
+      console.error('Failed to fetch SOS settings:', error);
+      toast.error('Failed to load SOS settings');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleConfigChange = async (key) => {
-    const newConfig = { ...config, [key]: !config[key] };
-    // Optimistic update
-    setConfig(newConfig);
-    try {
-      await sosApi.updateConfig(newConfig);
-      toast.success("Settings updated");
-    } catch (error) {
-      console.error("Error updating config:", error);
-      toast.error("Failed to update settings");
-      // Revert on error
-      setConfig(config);
+  const handleAddContact = async () => {
+    if (!newContact.name || !newContact.phone) {
+      toast.error('Name and phone number are required');
+      return;
     }
-  };
 
-  const handleAddContact = async (e) => {
-    e.preventDefault();
     try {
-      await sosApi.createContact({ ...newContact, priority: contacts.length + 1 });
-      toast.success("Emergency contact added");
+      setSaving(true);
+      const response = await sosApi.createContact(newContact);
+      setContacts([...contacts, response.data]);
       setShowAddModal(false);
-      setNewContact({ name: '', phone: '', relationship: '' });
-      fetchData();
+      setNewContact({ name: '', phone: '', email: '', relationship: '', priority: 1 });
+      toast.success('Emergency contact added successfully');
     } catch (error) {
-      console.error("Error adding contact:", error);
-      toast.error("Failed to add contact");
+      console.error('Failed to add contact:', error);
+      toast.error('Failed to add emergency contact');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDeleteContact = async () => {
+  const handleDeleteContact = async (contactId) => {
+    if (!confirm('Are you sure you want to remove this emergency contact?')) {
+      return;
+    }
+
     try {
-      await sosApi.deleteContact(deleteModal.contactId);
-      setContacts(contacts.filter(c => c.id !== deleteModal.contactId));
-      toast.success("Contact removed");
+      await sosApi.deleteContact(contactId);
+      setContacts(contacts.filter(c => c.id !== contactId));
+      toast.success('Emergency contact removed');
     } catch (error) {
-      console.error("Error deleting contact:", error);
-      toast.error("Failed to remove contact");
+      console.error('Failed to delete contact:', error);
+      toast.error('Failed to remove emergency contact');
     }
   };
+
+  const handleSaveConfig = async () => {
+    try {
+      setSaving(true);
+      await sosApi.updateConfig(config);
+      toast.success('SOS settings saved successfully');
+    } catch (error) {
+      console.error('Failed to save config:', error);
+      toast.error('Failed to save SOS settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 lg:p-8 max-w-[1600px] mx-auto">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-[1600px] mx-auto">
+      {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+          <Shield className="h-8 w-8 text-red-600" />
           SOS Settings
         </h1>
         <p className="text-lg text-gray-600">
-          Configure emergency protocols and contacts
+          Configure emergency contacts and alert preferences
         </p>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-8">
+      <div className="grid lg:grid-cols-3 gap-6">
         {/* Emergency Contacts */}
-        <div className="space-y-6">
+        <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                <Phone className="h-5 w-5 text-red-500" />
-                Emergency Contacts
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900">Emergency Contacts</h2>
               <button
                 onClick={() => setShowAddModal(true)}
-                className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 bg-slate-900 text-white rounded-xl font-medium hover:bg-gray-700 transition-colors flex items-center gap-2"
               >
-                <Plus className="h-5 w-5 text-gray-700" />
+                <Plus className="h-5 w-5" />
+                Add Contact
               </button>
             </div>
 
-            <div className="space-y-3">
-              {loading ? (
-                <p className="text-gray-500 text-center py-4">Loading contacts...</p>
-              ) : contacts.length > 0 ? (
-                contacts.map((contact, index) => (
-                  <div key={contact.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+            {contacts.length === 0 ? (
+              <div className="text-center py-12">
+                <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p className="text-gray-600 mb-4">No emergency contacts configured</p>
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="px-6 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-gray-700 transition-colors"
+                >
+                  Add Your First Contact
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {contacts.map((contact, index) => (
+                  <div
+                    key={contact.id}
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 hover:bg-gray-100 transition-colors"
+                  >
                     <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm">
+                      <div className="w-10 h-10 rounded-full bg-red-100 text-slate-900 flex items-center justify-center font-bold">
                         {index + 1}
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900">{contact.name}</h3>
-                        <p className="text-sm text-gray-500">{contact.relationship} • {contact.phone}</p>
+                        <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            {contact.phone}
+                          </span>
+                          {contact.email && (
+                            <span className="flex items-center gap-1">
+                              <Mail className="h-3 w-3" />
+                              {contact.email}
+                            </span>
+                          )}
+                          {contact.relationship && (
+                            <span className="flex items-center gap-1">
+                              <User className="h-3 w-3" />
+                              {contact.relationship}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <button
-                      onClick={() => setDeleteModal({ isOpen: true, contactId: contact.id, contactName: contact.name })}
-                      className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                      onClick={() => handleDeleteContact(contact.id)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      aria-label="Delete contact"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-5 w-5" />
                     </button>
                   </div>
-                ))
-              ) : (
-                <p className="text-gray-500 text-center py-4">No emergency contacts added</p>
-              )}
-            </div>
-          </div>
-
-          {/* Add Contact Modal */}
-          {showAddModal && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
-                <h3 className="text-xl font-bold text-gray-900 mb-4">Add Emergency Contact</h3>
-                <form onSubmit={handleAddContact} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={newContact.name}
-                      onChange={e => setNewContact({...newContact, name: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
-                    <input
-                      type="text"
-                      required
-                      value={newContact.relationship}
-                      onChange={e => setNewContact({...newContact, relationship: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                    <input
-                      type="tel"
-                      required
-                      value={newContact.phone}
-                      onChange={e => setNewContact({...newContact, phone: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddModal(false)}
-                      className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                    >
-                      Add Contact
-                    </button>
-                  </div>
-                </form>
+                ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Automatic Actions */}
+        {/* Alert Configuration */}
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-              <Shield className="h-5 w-5 text-indigo-500" />
-              Automatic Actions
-            </h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Alert Settings</h2>
             
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-red-50 rounded-lg">
-                    <Phone className="h-5 w-5 text-red-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900">Call Emergency Services</h3>
-                    <p className="text-sm text-gray-500">Automatically call 911 if no response from contacts</p>
-                  </div>
+                <div>
+                  <p className="font-medium text-gray-900">Send SMS</p>
+                  <p className="text-sm text-gray-600">Alert contacts via text message</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
+                    checked={config.send_sms}
+                    onChange={(e) => setConfig({ ...config, send_sms: e.target.checked })}
                     className="sr-only peer"
-                    checked={config.auto_call_emergency}
-                    onChange={() => handleConfigChange('auto_call_emergency')}
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                 </label>
               </div>
 
               <div className="flex items-center justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <MessageSquare className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900">Notify All Contacts</h3>
-                    <p className="text-sm text-gray-500">Send SMS alert to all emergency contacts</p>
-                  </div>
+                <div>
+                  <p className="font-medium text-gray-900">Make Call</p>
+                  <p className="text-sm text-gray-600">Call emergency contacts</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
+                    checked={config.make_call}
+                    onChange={(e) => setConfig({ ...config, make_call: e.target.checked })}
                     className="sr-only peer"
-                    checked={config.notify_all_contacts}
-                    onChange={() => handleConfigChange('notify_all_contacts')}
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                 </label>
               </div>
 
               <div className="flex items-center justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-yellow-50 rounded-lg">
-                    <Bell className="h-5 w-5 text-yellow-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900">Sound Alarm</h3>
-                    <p className="text-sm text-gray-500">Play loud alarm on smart glasses</p>
-                  </div>
+                <div>
+                  <p className="font-medium text-gray-900">Share Location</p>
+                  <p className="text-sm text-gray-600">Send GPS coordinates</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
+                    checked={config.share_location}
+                    onChange={(e) => setConfig({ ...config, share_location: e.target.checked })}
                     className="sr-only peer"
-                    checked={config.sound_alarm}
-                    onChange={() => handleConfigChange('sound_alarm')}
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Record Audio</p>
+                  <p className="text-sm text-gray-600">Capture ambient audio</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.record_audio}
+                    onChange={(e) => setConfig({ ...config, record_audio: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Email Alert</p>
+                  <p className="text-sm text-gray-600">Send email notifications</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.email_alert}
+                    onChange={(e) => setConfig({ ...config, email_alert: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Alert Services</p>
+                  <p className="text-sm text-gray-600">Notify emergency services</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.alert_services}
+                    onChange={(e) => setConfig({ ...config, alert_services: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                 </label>
               </div>
             </div>
+
+            <button
+              onClick={handleSaveConfig}
+              disabled={saving}
+              className="w-full mt-6 px-6 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-5 w-5" />
+                  Save Settings
+                </>
+              )}
+            </button>
           </div>
 
-          <div className="bg-red-50 rounded-2xl border border-red-100 p-6">
-            <div className="flex gap-4">
-              <AlertCircle className="h-6 w-6 text-red-600 shrink-0" />
+          {/* Info Card */}
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-red-900 mb-1">Emergency Protocol</h3>
-                <p className="text-sm text-red-700 leading-relaxed">
-                  When SOS is triggered, the system will first attempt to contact the primary caregiver. 
-                  If no response within 60 seconds, it will proceed to notify all emergency contacts 
-                  and share the current location.
+                <h3 className="font-semibold text-blue-900 mb-2">Important</h3>
+                <p className="text-sm text-blue-800">
+                  Emergency contacts will be notified immediately when an SOS alert is triggered. 
+                  Make sure all contact information is accurate and up to date.
                 </p>
               </div>
             </div>
@@ -282,16 +329,84 @@ const SOSSettings = () => {
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
-      <DeleteConfirmationModal
-        isOpen={deleteModal.isOpen}
-        onClose={() => setDeleteModal({ isOpen: false, contactId: null, contactName: '' })}
-        onConfirm={handleDeleteContact}
-        title="Remove Emergency Contact"
-        message="Are you sure you want to remove this emergency contact? They will no longer be notified during SOS events."
-        itemName={deleteModal.contactName}
-        confirmText="Remove Contact"
-      />
+      {/* Add Contact Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-900">Add Emergency Contact</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Name <span className="text-slate-800">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newContact.name}
+                  onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="John Doe"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone Number <span className="text-slate-800">*</span>
+                </label>
+                <input
+                  type="tel"
+                  value={newContact.phone}
+                  onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="+1 (555) 123-4567"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email (Optional)
+                </label>
+                <input
+                  type="email"
+                  value={newContact.email}
+                  onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="john@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Relationship (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={newContact.relationship}
+                  onChange={(e) => setNewContact({ ...newContact, relationship: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="e.g., Spouse, Daughter, Friend"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setNewContact({ name: '', phone: '', email: '', relationship: '', priority: 1 });
+                }}
+                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddContact}
+                disabled={saving || !newContact.name || !newContact.phone}
+                className="flex-1 px-6 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-gray-700 disabled:opacity-50"
+              >
+                {saving ? 'Adding...' : 'Add Contact'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

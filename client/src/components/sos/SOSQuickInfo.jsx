@@ -3,7 +3,7 @@
  * Displays wearer profile, emergency contacts, and status
  */
 
-import { User, Phone, MessageSquare, AlertCircle, Heart } from 'lucide-react';
+import { Phone, MessageSquare, AlertCircle } from 'lucide-react';
 import SOSStatusIndicator from './SOSStatusIndicator';
 
 /**
@@ -47,7 +47,7 @@ const SOSQuickInfo = ({
                             className="w-14 h-14 rounded-full object-cover border-2 border-gray-200"
                         />
                     ) : (
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 
+                        <div className="w-14 h-14 rounded-full bg-linear-to-br from-indigo-400 to-purple-500 
               flex items-center justify-center text-white text-lg font-bold">
                             {wearer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                         </div>
@@ -59,18 +59,6 @@ const SOSQuickInfo = ({
                         </p>
                     </div>
                 </div>
-
-                {/* Medical Notes */}
-                {wearer.medicalNotes && (
-                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 mb-4">
-                        <div className="flex items-start gap-2">
-                            <Heart className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
-                            <p className="text-sm text-blue-700 leading-relaxed">
-                                {wearer.medicalNotes}
-                            </p>
-                        </div>
-                    </div>
-                )}
 
                 {/* Status */}
                 <SOSStatusIndicator
