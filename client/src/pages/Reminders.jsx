@@ -189,6 +189,22 @@ const Reminders = () => {
         </button>
       </div>
 
+      {/* Info Banner */}
+      <div className="bg-indigo-50 rounded-2xl border border-indigo-200 p-6 mb-6">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+            <Bell className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-1">Smart Reminder Alerts</h3>
+            <p className="text-sm text-gray-600">
+              Reminders automatically create alerts at their scheduled time. Daily reminders reset each day, 
+              weekly reminders trigger on the same day each week, and weekday reminders only trigger Monday-Friday.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-8">
         <div className="flex items-center gap-4 overflow-x-auto pb-2 md:pb-0">

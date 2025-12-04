@@ -1,4 +1,6 @@
 import os
+import asyncio
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 # Force reload environment variables
@@ -19,6 +21,7 @@ from .routes.alertRoutes import router as alert_router
 from .routes.reminderRoutes import router as reminder_router
 from .routes.sosRoutes import router as sos_router
 from .routes.userRoutes import router as user_router
+from .scheduler import scheduler
 
 CLIENT_URL = os.getenv("CLIENT_URL", "http://localhost:5173")
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-should-be-in-env")
@@ -26,10 +29,25 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-should-be-in-env")
 # Create Database Tables
 Base.metadata.create_all(bind=engine)
 
+# Lifespan context manager for startup and shutdown events
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start the reminder scheduler
+    scheduler_task = asyncio.create_task(scheduler.start())
+    yield
+    # Shutdown: Stop the scheduler
+    scheduler.stop()
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        pass
+
 app = FastAPI(
     title="MindTrace",
     version="1.0",
     description="API for MindTrace",
+    lifespan=lifespan
 )
 
 origins = [
@@ -67,3 +85,13 @@ app.include_router(user_router)
 @app.get("/")
 def server_status():
     return JSONResponse(content={ "message": "Server is live" }, status_code=200)
+
+@app.get("/health/scheduler")
+def scheduler_health():
+    """Check if the reminder scheduler is running"""
+    from .scheduler import scheduler
+    return {
+        "running": scheduler.running,
+        "check_interval": scheduler.check_interval,
+        "last_reset_date": str(scheduler.last_reset_date) if scheduler.last_reset_date else None
+    }

@@ -83,10 +83,12 @@ class Reminder(Base):
     title = Column(String, nullable=False)
     type = Column(String, default="medication") # medication, meal, activity, hydration
     time = Column(String, nullable=False) # HH:MM format
-    recurrence = Column(String, default="daily")
+    recurrence = Column(String, default="daily") # daily, weekly, weekdays, weekends, custom
     completed = Column(Boolean, default=False)
     notes = Column(Text, nullable=True)
     date = Column(DateTime(timezone=True), server_default=func.now()) # For specific date reminders, or just tracking creation
+    last_triggered = Column(DateTime(timezone=True), nullable=True) # Track when last alert was created
+    enabled = Column(Boolean, default=True) # Allow disabling without deleting
 
     user = sa_relationship("User", back_populates="reminders")
 
