@@ -3,7 +3,7 @@
  * Main SOS Alert Dashboard page
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Shield, Bell } from 'lucide-react';
 
 // Components
@@ -19,13 +19,19 @@ import useSOSAlerts from '../../hooks/useSOSAlerts';
 import useLocationTracking from '../../hooks/useLocationTracking';
 import useNotifications from '../../hooks/useNotifications';
 
+// Services
+import { userApi, sosApi } from '../../services/api';
+
 // Config
 import {
-    DEFAULT_WEARER_PROFILE,
     DEFAULT_EMERGENCY_CONTACTS
 } from '../../constants/sosConfig';
 
 const SOSPage = () => {
+    const [wearerProfile, setWearerProfile] = useState(null);
+    const [emergencyContacts, setEmergencyContacts] = useState(DEFAULT_EMERGENCY_CONTACTS);
+    const [profileLoading, setProfileLoading] = useState(true);
+
     // SOS Alert state
     const {
         activeAlert,
@@ -49,6 +55,48 @@ const SOSPage = () => {
         getTimeSinceUpdate
     } = useLocationTracking({ enablePolling: true, pollInterval: 3000 });
 
+    // Fetch user profile and emergency contacts
+    useEffect(() => {
+        const fetchProfileData = async () => {
+            try {
+                const [profileRes, contactsRes] = await Promise.all([
+                    userApi.getProfile(),
+                    sosApi.getContacts()
+                ]);
+
+                setWearerProfile({
+                    id: profileRes.data.id,
+                    name: profileRes.data.full_name || 'User',
+                    photoUrl: profileRes.data.profile_image,
+                    medicalNotes: 'Medical information not available',
+                    batteryLevel: batteryLevel,
+                    connectionStatus: connectionStatus,
+                    lastSeen: new Date().toISOString()
+                });
+
+                if (contactsRes.data && contactsRes.data.length > 0) {
+                    setEmergencyContacts(contactsRes.data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch profile data:', error);
+                // Use default profile if fetch fails
+                setWearerProfile({
+                    id: 'user',
+                    name: 'User',
+                    photoUrl: null,
+                    medicalNotes: 'Medical information not available',
+                    batteryLevel: batteryLevel,
+                    connectionStatus: connectionStatus,
+                    lastSeen: new Date().toISOString()
+                });
+            } finally {
+                setProfileLoading(false);
+            }
+        };
+
+        fetchProfileData();
+    }, [batteryLevel, connectionStatus]);
+
     // Notifications
     const {
         preferences,
@@ -62,12 +110,21 @@ const SOSPage = () => {
 
     // Handle SOS simulation
     const handleSimulateSOS = async () => {
-        const alert = await triggerAlert({ isTest: true });
-        if (alert) {
-            triggerSOSNotification(
-                `SOS Alert received at ${alert.location?.address || 'Unknown location'}`,
-                alert.location
-            );
+        try {
+            const alert = await triggerAlert({
+                isTest: true,
+                location: currentLocation,
+                batteryLevel: batteryLevel,
+                connectionStatus: connectionStatus
+            });
+            if (alert) {
+                triggerSOSNotification(
+                    `SOS Alert received at ${alert.location?.address || 'Unknown location'}`,
+                    alert.location
+                );
+            }
+        } catch (error) {
+            console.error('Failed to simulate SOS:', error);
         }
     };
 
@@ -78,6 +135,18 @@ const SOSPage = () => {
             updateAlertLocation(newLocation);
         }
     };
+
+    // Auto-update alert location when current location changes (real-time tracking)
+    useEffect(() => {
+        if (activeAlert && currentLocation) {
+            // Update the alert location in real-time
+            const updateTimer = setTimeout(() => {
+                updateAlertLocation(currentLocation);
+            }, 5000); // Update every 5 seconds
+
+            return () => clearTimeout(updateTimer);
+        }
+    }, [activeAlert, currentLocation, updateAlertLocation]);
 
     // Handle resolve
     const handleResolve = (alertId, resolvedBy, notes) => {
@@ -98,7 +167,7 @@ const SOSPage = () => {
 
     const status = getOverallStatus();
 
-    if (isLoading) {
+    if (isLoading || profileLoading) {
         return (
             <div className="p-6 lg:p-8 flex items-center justify-center min-h-[400px]">
                 <div className="flex flex-col items-center">
@@ -159,8 +228,8 @@ const SOSPage = () => {
                 {/* Quick Info Sidebar */}
                 <div className="lg:col-span-1">
                     <SOSQuickInfo
-                        wearer={DEFAULT_WEARER_PROFILE}
-                        contacts={DEFAULT_EMERGENCY_CONTACTS}
+                        wearer={wearerProfile}
+                        contacts={emergencyContacts}
                         batteryLevel={batteryLevel}
                         connectionStatus={connectionStatus}
                         lastSeen={getTimeSinceUpdate()}

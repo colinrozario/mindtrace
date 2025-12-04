@@ -1,44 +1,15 @@
 /**
  * useSOSAlerts Hook
- * Manages SOS alert state, history, and transitions
+ * Manages SOS alert state, history, and transitions with real-time backend integration
  */
 
-import { useState, useCallback, useEffect } from 'react';
-import { generateMockAlert, generateMockAlertHistory } from '../utils/mockLocationGenerator';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { sosApi } from '../services/api';
 import { reverseGeocode } from '../utils/geocoding';
-
-const STORAGE_KEY = 'mindtrace_sos_alerts';
-
-/**
- * Load alert history from local storage
- * @returns {import('../types/sos.types').SOSAlert[]}
- */
-const loadAlertHistory = () => {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            return JSON.parse(stored);
-        }
-    } catch (error) {
-        console.warn('Failed to load alert history:', error);
-    }
-    return [];
-};
+import toast from 'react-hot-toast';
 
 /**
- * Save alert history to local storage
- * @param {import('../types/sos.types').SOSAlert[]} history 
- */
-const saveAlertHistory = (history) => {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-    } catch (error) {
-        console.warn('Failed to save alert history:', error);
-    }
-};
-
-/**
- * Custom hook for managing SOS alerts
+ * Custom hook for managing SOS alerts with real-time backend integration
  * @returns {Object} Alert state and actions
  */
 export const useSOSAlerts = () => {
@@ -46,128 +17,201 @@ export const useSOSAlerts = () => {
     const [alertHistory, setAlertHistory] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isTestMode, setIsTestMode] = useState(false);
+    const pollIntervalRef = useRef(null);
 
-    // Load history on mount
-    useEffect(() => {
-        const history = loadAlertHistory();
-        if (history.length === 0) {
-            // Generate some mock history for demo
-            const mockHistory = generateMockAlertHistory(3);
-            setAlertHistory(mockHistory);
-            saveAlertHistory(mockHistory);
-        } else {
-            setAlertHistory(history);
+    /**
+     * Fetch active alert from backend
+     */
+    const fetchActiveAlert = useCallback(async () => {
+        try {
+            const response = await sosApi.getActiveAlert();
+            if (response.data) {
+                setActiveAlert(response.data);
+                setIsTestMode(response.data.is_test || false);
+            } else {
+                setActiveAlert(null);
+                setIsTestMode(false);
+            }
+        } catch (error) {
+            console.error('Failed to fetch active alert:', error);
         }
-        setIsLoading(false);
     }, []);
 
     /**
-     * Trigger a new SOS alert
-     * @param {Partial<import('../types/sos.types').SOSAlert>} [overrides]
-     * @returns {Promise<import('../types/sos.types').SOSAlert>}
+     * Fetch alert history from backend
      */
-    const triggerAlert = useCallback(async (overrides = {}) => {
-        const alert = generateMockAlert(overrides);
-
-        // Try to get a better address via geocoding
-        if (alert.location && !alert.location.address) {
-            try {
-                const address = await reverseGeocode(alert.location.lat, alert.location.lng);
-                alert.location.address = address;
-            } catch (error) {
-                console.warn('Geocoding failed:', error);
-            }
+    const fetchAlertHistory = useCallback(async () => {
+        try {
+            const response = await sosApi.getAlerts({ limit: 50, status: 'resolved' });
+            setAlertHistory(response.data || []);
+        } catch (error) {
+            console.error('Failed to fetch alert history:', error);
         }
+    }, []);
 
-        setActiveAlert(alert);
-        setIsTestMode(alert.isTest || false);
+    // Load data on mount and set up polling
+    useEffect(() => {
+        const loadData = async () => {
+            setIsLoading(true);
+            await Promise.all([fetchActiveAlert(), fetchAlertHistory()]);
+            setIsLoading(false);
+        };
 
-        return alert;
+        loadData();
+
+        // Poll for active alert updates every 3 seconds
+        pollIntervalRef.current = setInterval(() => {
+            fetchActiveAlert();
+        }, 3000);
+
+        return () => {
+            if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+            }
+        };
+    }, [fetchActiveAlert, fetchAlertHistory]);
+
+    /**
+     * Trigger a new SOS alert
+     * @param {Object} [options]
+     * @param {boolean} [options.isTest] - Whether this is a test alert
+     * @param {Object} [options.location] - Location data
+     * @param {number} [options.batteryLevel] - Battery level
+     * @param {string} [options.connectionStatus] - Connection status
+     * @returns {Promise<Object>}
+     */
+    const triggerAlert = useCallback(async (options = {}) => {
+        try {
+            const alertData = {
+                is_test: options.isTest || false,
+                location: options.location || null,
+                battery_level: options.batteryLevel || null,
+                connection_status: options.connectionStatus || 'online'
+            };
+
+            // Try to get address via geocoding if location provided but no address
+            if (alertData.location && !alertData.location.address) {
+                try {
+                    const address = await reverseGeocode(alertData.location.lat, alertData.location.lng);
+                    alertData.location.address = address;
+                } catch (error) {
+                    console.warn('Geocoding failed:', error);
+                }
+            }
+
+            const response = await sosApi.createAlert(alertData);
+            const alert = response.data;
+            
+            setActiveAlert(alert);
+            setIsTestMode(alert.is_test || false);
+            
+            toast.success(alert.is_test ? 'Test SOS alert created' : 'SOS alert triggered!');
+            
+            return alert;
+        } catch (error) {
+            console.error('Failed to trigger alert:', error);
+            toast.error('Failed to trigger SOS alert');
+            throw error;
+        }
     }, []);
 
     /**
      * Acknowledge an active alert
-     * @param {string} alertId 
+     * @param {number} alertId 
      */
-    const acknowledgeAlert = useCallback((alertId) => {
-        setActiveAlert(prev => {
-            if (prev && prev.id === alertId) {
-                return { ...prev, status: 'acknowledged' };
-            }
-            return prev;
-        });
+    const acknowledgeAlert = useCallback(async (alertId) => {
+        try {
+            const response = await sosApi.updateAlert(alertId, { status: 'acknowledged' });
+            setActiveAlert(response.data);
+            toast.success('Alert acknowledged');
+        } catch (error) {
+            console.error('Failed to acknowledge alert:', error);
+            toast.error('Failed to acknowledge alert');
+        }
     }, []);
 
     /**
      * Resolve an active alert
-     * @param {string} alertId 
+     * @param {number} alertId 
      * @param {string} [resolvedBy] 
      * @param {string} [notes] 
      */
-    const resolveAlert = useCallback((alertId, resolvedBy = 'Caregiver', notes = '') => {
-        setActiveAlert(prev => {
-            if (prev && prev.id === alertId) {
-                const resolvedAlert = {
-                    ...prev,
-                    status: 'resolved',
-                    resolvedAt: new Date().toISOString(),
-                    resolvedBy,
-                    notes: notes || prev.notes
-                };
-
-                // Add to history
-                setAlertHistory(history => {
-                    const newHistory = [resolvedAlert, ...history].slice(0, 50); // Keep last 50
-                    saveAlertHistory(newHistory);
-                    return newHistory;
-                });
-
-                return null; // Clear active alert
-            }
-            return prev;
-        });
-        setIsTestMode(false);
-    }, []);
+    const resolveAlert = useCallback(async (alertId, resolvedBy = 'Caregiver', notes = '') => {
+        try {
+            await sosApi.updateAlert(alertId, {
+                status: 'resolved',
+                resolved_by: resolvedBy,
+                notes: notes
+            });
+            
+            setActiveAlert(null);
+            setIsTestMode(false);
+            
+            // Refresh history
+            await fetchAlertHistory();
+            
+            toast.success('Alert resolved successfully');
+        } catch (error) {
+            console.error('Failed to resolve alert:', error);
+            toast.error('Failed to resolve alert');
+        }
+    }, [fetchAlertHistory]);
 
     /**
      * Clear active alert without resolving (cancel)
      */
-    const cancelAlert = useCallback(() => {
-        setActiveAlert(null);
-        setIsTestMode(false);
-    }, []);
+    const cancelAlert = useCallback(async () => {
+        if (activeAlert) {
+            try {
+                await sosApi.updateAlert(activeAlert.id, { status: 'resolved', resolved_by: 'System', notes: 'Cancelled' });
+                setActiveAlert(null);
+                setIsTestMode(false);
+                await fetchAlertHistory();
+            } catch (error) {
+                console.error('Failed to cancel alert:', error);
+            }
+        }
+    }, [activeAlert, fetchAlertHistory]);
 
     /**
      * Clear all alert history
      */
-    const clearHistory = useCallback(() => {
-        setAlertHistory([]);
-        saveAlertHistory([]);
+    const clearHistory = useCallback(async () => {
+        try {
+            await sosApi.clearHistory();
+            setAlertHistory([]);
+            toast.success('Alert history cleared');
+        } catch (error) {
+            console.error('Failed to clear history:', error);
+            toast.error('Failed to clear history');
+        }
     }, []);
 
     /**
      * Update location of active alert
-     * @param {import('../types/sos.types').Location} newLocation 
+     * @param {Object} newLocation 
      */
-    const updateAlertLocation = useCallback((newLocation) => {
-        setActiveAlert(prev => {
-            if (prev) {
-                return { ...prev, location: newLocation };
+    const updateAlertLocation = useCallback(async (newLocation) => {
+        if (activeAlert) {
+            try {
+                const response = await sosApi.updateAlert(activeAlert.id, { location: newLocation });
+                setActiveAlert(response.data);
+            } catch (error) {
+                console.error('Failed to update alert location:', error);
             }
-            return prev;
-        });
-    }, []);
+        }
+    }, [activeAlert]);
 
     /**
      * Get alert duration in human-readable format
-     * @param {import('../types/sos.types').SOSAlert} alert 
+     * @param {Object} alert 
      * @returns {string}
      */
     const getAlertDuration = useCallback((alert) => {
         if (!alert) return '';
 
         const start = new Date(alert.timestamp);
-        const end = alert.resolvedAt ? new Date(alert.resolvedAt) : new Date();
+        const end = alert.resolved_at ? new Date(alert.resolved_at) : new Date();
         const diffMs = end - start;
         const diffMins = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMins / 60);

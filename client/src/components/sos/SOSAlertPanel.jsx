@@ -83,6 +83,12 @@ const SOSAlertPanel = ({
                             </span>
                         )}
                     </div>
+                    
+                    {activeAlert.wearer_name && (
+                        <p className="text-sm text-amber-700 mt-1">
+                            From: <span className="font-semibold">{activeAlert.wearer_name}</span>
+                        </p>
+                    )}
 
                     <div className="flex items-center gap-3 mt-2 text-amber-700 flex-wrap">
                         <div className="flex items-center gap-1.5">

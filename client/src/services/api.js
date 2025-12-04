@@ -85,6 +85,13 @@ export const sosApi = {
   deleteContact: (id) => api.delete(`/sos/contacts/${id}`),
   getConfig: () => api.get('/sos/config'),
   updateConfig: (data) => api.put('/sos/config', data),
+  
+  // SOS Alerts
+  createAlert: (data) => api.post('/sos/alerts', data),
+  getAlerts: (params) => api.get('/sos/alerts', { params }),
+  getActiveAlert: () => api.get('/sos/alerts/active'),
+  updateAlert: (id, data) => api.put(`/sos/alerts/${id}`, data),
+  clearHistory: () => api.delete('/sos/alerts/history'),
 };
 
 export const userApi = {

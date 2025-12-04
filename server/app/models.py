@@ -131,3 +131,27 @@ class ChatMessage(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     user = sa_relationship("User")
+
+class SOSAlert(Base):
+    __tablename__ = "sos_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    status = Column(String, default="pending")  # pending, acknowledged, resolved
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_by = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    is_test = Column(Boolean, default=False)
+    
+    # Location data
+    latitude = Column(String, nullable=True)
+    longitude = Column(String, nullable=True)
+    accuracy = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    
+    # Device data
+    battery_level = Column(Integer, nullable=True)
+    connection_status = Column(String, nullable=True)
+
+    user = sa_relationship("User")
