@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, Clock, Users, Bell, Calendar, AlertTriangle, Settings, HelpCircle, X, LogOut } from 'lucide-react';
+import { Home, Clock, Users, Bell, Calendar, AlertTriangle, Shield, Settings, HelpCircle, X, LogOut } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
 import { logout } from '../services/auth';
 import { userApi } from '../services/api';
@@ -15,6 +15,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { icon: Users, label: 'Contacts', path: '/dashboard/contacts' },
     { icon: Bell, label: 'Alerts', path: '/dashboard/alerts' },
     { icon: Calendar, label: 'Reminders', path: '/dashboard/reminders' },
+    { icon: Shield, label: 'SOS Alerts', path: '/dashboard/sos-alerts' },
     { icon: AlertTriangle, label: 'SOS Settings', path: '/dashboard/sos' },
   ];
 
@@ -55,7 +56,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     if (path === '/dashboard') {
       return location.pathname === '/dashboard';
     }
-    return location.pathname.startsWith(path);
+    // Exact match OR path followed by a slash (for nested routes)
+    return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
   const getInitials = () => {
@@ -158,7 +160,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               </button>
             );
           })}
-          
+
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm text-red-600 hover:bg-red-50"
@@ -189,7 +191,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               <p className="text-sm font-semibold text-gray-900 truncate">
                 {profile?.full_name || 'User'}
               </p>
-              <p className="text-xs text-gray-500 truncate">{profile?.email || 'user@gmail.com' }</p>
+              <p className="text-xs text-gray-500 truncate">{profile?.email || 'user@gmail.com'}</p>
             </div>
           </button>
         </div>

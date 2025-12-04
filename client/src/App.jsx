@@ -15,6 +15,7 @@ import ContactsDirectory from './pages/ContactsDirectory'
 import AlertsNotifications from './pages/AlertsNotifications'
 import Reminders from './pages/Reminders'
 import SOSSettings from './pages/SOSSettings'
+import SOSPage from './components/sos/SOSPage'
 import ProfileSettings from './pages/ProfileSettings'
 import HelpSupport from './pages/HelpSupport'
 
@@ -48,6 +49,7 @@ const App = () => {
           <Route path='contacts' element={<ContactsDirectory />} />
           <Route path='alerts' element={<AlertsNotifications />} />
           <Route path='reminders' element={<Reminders />} />
+          <Route path='sos-alerts' element={<SOSPage />} />
           <Route path='sos' element={<SOSSettings />} />
           <Route path='settings' element={<ProfileSettings />} />
           <Route path='help' element={<HelpSupport />} />
