@@ -85,6 +85,39 @@ async def send_chat_message(
         db.add(assistant_message)
         db.commit()
         
+        # Index messages in ChromaDB
+        try:
+            from app.chroma_client import get_conversation_collection
+            collection = get_conversation_collection()
+            
+            # Index user message
+            collection.add(
+                ids=[f"msg_{user_message.id}"],
+                documents=[user_message.content],
+                metadatas=[{
+                    "type": "chat_message",
+                    "user_id": current_user.id,
+                    "conversation_id": conversation_id,
+                    "role": "user",
+                    "timestamp": datetime.now().isoformat()
+                }]
+            )
+            
+            # Index assistant message
+            collection.add(
+                ids=[f"msg_{assistant_message.id}"],
+                documents=[assistant_message.content],
+                metadatas=[{
+                    "type": "chat_message",
+                    "user_id": current_user.id,
+                    "conversation_id": conversation_id,
+                    "role": "assistant",
+                    "timestamp": datetime.now().isoformat()
+                }]
+            )
+        except Exception as e:
+            print(f"Error indexing chat messages: {e}")
+
         return ChatResponse(
             response=ai_response,
             timestamp=datetime.now(),
@@ -153,6 +186,43 @@ async def send_chat_message_streaming(
                 )
                 db.add(assistant_message)
                 db.commit()
+                
+                # Index messages in ChromaDB
+                try:
+                    from app.chroma_client import get_conversation_collection
+                    collection = get_conversation_collection()
+                    
+                    # Index user message (we need to fetch it or reconstruct it, but we have the ID if we saved it earlier)
+                    # Actually user_message was saved before streaming started.
+                    # We can access user_message.id if it's in scope. 
+                    # user_message is defined in the outer scope, so it should be accessible.
+                    
+                    collection.add(
+                        ids=[f"msg_{user_message.id}"],
+                        documents=[user_message.content],
+                        metadatas=[{
+                            "type": "chat_message",
+                            "user_id": current_user.id,
+                            "conversation_id": conversation_id,
+                            "role": "user",
+                            "timestamp": datetime.now().isoformat()
+                        }]
+                    )
+                    
+                    # Index assistant message
+                    collection.add(
+                        ids=[f"msg_{assistant_message.id}"],
+                        documents=[assistant_message.content],
+                        metadatas=[{
+                            "type": "chat_message",
+                            "user_id": current_user.id,
+                            "conversation_id": conversation_id,
+                            "role": "assistant",
+                            "timestamp": datetime.now().isoformat()
+                        }]
+                    )
+                except Exception as e:
+                    print(f"Error indexing chat messages: {e}")
                 
                 yield "data: [DONE]\n\n"
             except Exception as e:

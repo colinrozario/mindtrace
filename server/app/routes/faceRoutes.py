@@ -23,7 +23,8 @@ face_app = load_models()
 @router.post("/recognize")
 async def recognize_face_endpoint(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     try:
         # Read image directly from memory
@@ -35,7 +36,8 @@ async def recognize_face_endpoint(
              print("DEBUG: Failed to decode image in recognize_face_endpoint")
              raise HTTPException(status_code=400, detail="Invalid image data")
 
-        result = recognize_face(face_app, img)
+        # Pass user_id to restrict recognition to user's contacts
+        result = recognize_face(face_app, img, user_id=current_user.id)
         
         # Log recognition results for debugging
         if result:

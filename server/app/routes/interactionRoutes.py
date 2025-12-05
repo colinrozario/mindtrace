@@ -120,6 +120,38 @@ def create_interaction(
     db.add(db_interaction)
     db.commit()
     db.refresh(db_interaction)
+    
+    # Index in ChromaDB
+    try:
+        from app.chroma_client import get_conversation_collection
+        collection = get_conversation_collection()
+        
+        # Prepare text content for embedding
+        # We combine summary, full_details, and key_topics
+        text_content = f"Summary: {db_interaction.summary or ''}\n"
+        if db_interaction.full_details:
+            text_content += f"Details: {db_interaction.full_details}\n"
+        if db_interaction.key_topics:
+            text_content += f"Topics: {', '.join(db_interaction.key_topics)}\n"
+        
+        collection.add(
+            ids=[f"interaction_{db_interaction.id}"],
+            documents=[text_content],
+            metadatas=[{
+                "type": "interaction",
+                "interaction_id": db_interaction.id,
+                "user_id": current_user.id,
+                "contact_id": db_interaction.contact_id or -1,
+                "contact_name": db_interaction.contact_name or "Unknown",
+                "timestamp": db_interaction.timestamp.isoformat(),
+                "mood": db_interaction.mood or "neutral"
+            }]
+        )
+        print(f"Indexed interaction {db_interaction.id} in ChromaDB")
+    except Exception as e:
+        print(f"Error indexing interaction: {e}")
+        # Don't fail the request if indexing fails, just log it
+    
     return db_interaction
 
 @router.put("/{interaction_id}/star", response_model=InteractionResponse)
@@ -136,3 +168,52 @@ def toggle_star_interaction(
     db.commit()
     db.refresh(interaction)
     return interaction
+
+@router.post("/sync-to-chroma")
+def sync_interactions_to_chroma(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Sync all past interactions to ChromaDB.
+    """
+    try:
+        from app.chroma_client import get_conversation_collection
+        collection = get_conversation_collection()
+        
+        interactions = db.query(Interaction).filter(Interaction.user_id == current_user.id).all()
+        
+        ids = []
+        documents = []
+        metadatas = []
+        
+        for interaction in interactions:
+            text_content = f"Summary: {interaction.summary or ''}\n"
+            if interaction.full_details:
+                text_content += f"Details: {interaction.full_details}\n"
+            if interaction.key_topics:
+                text_content += f"Topics: {', '.join(interaction.key_topics)}\n"
+            
+            ids.append(f"interaction_{interaction.id}")
+            documents.append(text_content)
+            metadatas.append({
+                "type": "interaction",
+                "interaction_id": interaction.id,
+                "user_id": current_user.id,
+                "contact_id": interaction.contact_id or -1,
+                "contact_name": interaction.contact_name or "Unknown",
+                "timestamp": interaction.timestamp.isoformat() if interaction.timestamp else "",
+                "mood": interaction.mood or "neutral"
+            })
+            
+        if ids:
+            collection.upsert(
+                ids=ids,
+                documents=documents,
+                metadatas=metadatas
+            )
+            
+        return {"message": f"Synced {len(ids)} interactions to ChromaDB", "count": len(ids)}
+    except Exception as e:
+        print(f"Error syncing interactions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

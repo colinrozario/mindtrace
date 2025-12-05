@@ -7,11 +7,16 @@ import os
 import sys
 
 # Add parent directory to path to import from app
+# Add parent directory to path to import from app
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROFILES_DIR = os.path.join(BASE_DIR, "profiles")
-EMBEDDINGS_FILE = os.path.join(PROFILES_DIR, "embeddings.json")
+# Import ChromaDB client
+try:
+    from app.chroma_client import get_face_collection
+except ImportError:
+    # Fallback for when running as script
+    sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))
+    from app.chroma_client import get_face_collection
 
 def load_models():
     """
@@ -50,9 +55,6 @@ def detect_and_embed(app, image):
     print(f"DEBUG: Returning {len(results)} face embeddings")
     return results
 
-# Removed register_profile function - profiles are now only registered through database contacts
-# Use sync_embeddings_from_db() to sync from database
-
 def cosine_similarity(a, b):
     a, b = np.array(a), np.array(b)
     norm_a = np.linalg.norm(a)
@@ -61,41 +63,9 @@ def cosine_similarity(a, b):
         return 0.0
     return np.dot(a, b) / (norm_a * norm_b)
 
-# Cache for embeddings with file modification time tracking
-_embeddings_cache = {
-    "profiles": [],
-    "mtime": 0
-}
-
-def load_embeddings_with_cache():
+def recognize_face(app, image, threshold=0.45, user_id=None):
     """
-    Load embeddings from file with caching based on file modification time.
-    This ensures we always use fresh data when the file is updated.
-    """
-    global _embeddings_cache
-    
-    try:
-        if os.path.exists(EMBEDDINGS_FILE):
-            current_mtime = os.path.getmtime(EMBEDDINGS_FILE)
-            
-            # Only reload if file has been modified
-            if current_mtime != _embeddings_cache["mtime"]:
-                with open(EMBEDDINGS_FILE, "r") as f:
-                    profiles = json.load(f)
-                _embeddings_cache["profiles"] = profiles
-                _embeddings_cache["mtime"] = current_mtime
-                print(f"DEBUG: Reloaded {len(profiles)} embeddings from file (mtime: {current_mtime})")
-            
-            return _embeddings_cache["profiles"]
-        else:
-            return []
-    except Exception as e:
-        print(f"Error loading embeddings: {e}")
-        return []
-
-def recognize_face(app, image, threshold=0.45):
-    """
-    Compare input face embeddings to stored embeddings using cosine similarity.
+    Compare input face embeddings to stored embeddings using ChromaDB.
     Returns a list of recognition results.
     """
     # Get embedding and bbox for all faces
@@ -105,13 +75,12 @@ def recognize_face(app, image, threshold=0.45):
     if not detected_faces:
         return []
 
-    # Load stored profiles with caching
-    profiles = load_embeddings_with_cache()
-    
-    if not profiles:
-        print("DEBUG: No profiles loaded - all faces will be marked as Unknown")
-    else:
-        print(f"DEBUG: Loaded {len(profiles)} profiles for comparison")
+    # Get ChromaDB collection
+    try:
+        collection = get_face_collection()
+    except Exception as e:
+        print(f"Error connecting to ChromaDB: {e}")
+        return []
 
     results = []
 
@@ -119,17 +88,44 @@ def recognize_face(app, image, threshold=0.45):
         current_emb = face_data["embedding"]
         current_bbox = face_data["bbox"]
 
+        # Query ChromaDB
+        # We query for the nearest neighbor
+        # Filter by user_id if provided
+        where_filter = {"user_id": user_id} if user_id else None
+        
+        try:
+            query_result = collection.query(
+                query_embeddings=[current_emb],
+                n_results=1,
+                where=where_filter
+            )
+        except Exception as e:
+            print(f"Error querying ChromaDB: {e}")
+            query_result = None
+
         best_match = None
         best_score = -1
+        
+        # Chroma returns distance (L2 or Cosine). We configured 'cosine' space.
+        # Cosine distance = 1 - Cosine Similarity.
+        # So Similarity = 1 - Distance.
+        # We want Similarity > threshold.
+        # So 1 - Distance > threshold => Distance < 1 - threshold.
+        
+        if query_result and query_result['ids'] and len(query_result['ids'][0]) > 0:
+            # query_result['distances'][0][0] is the distance of the best match
+            distance = query_result['distances'][0][0]
+            similarity = 1.0 - distance
+            
+            metadata = query_result['metadatas'][0][0]
+            
+            print(f"DEBUG: Face {idx} match: {metadata.get('name')} (sim: {similarity:.3f}, dist: {distance:.3f})")
+            
+            if similarity > threshold:
+                best_score = similarity
+                best_match = metadata
 
-        # Compare against all stored profiles
-        for profile in profiles:
-            score = cosine_similarity(current_emb, profile["embedding"])
-            if score > best_score:
-                best_score = score
-                best_match = profile
-
-        if best_score < threshold or best_match is None:
+        if best_match is None:
             result = {
                 "name": "Unknown", 
                 "relation": "Unknown", 
@@ -159,7 +155,7 @@ def sync_embeddings_from_db(app, db_session):
     """
     Sync face embeddings from database contacts with profile photos.
     This is the ONLY way to register faces - all photos must be added through the contacts page.
-    This function replaces the embeddings.json with data from the database.
+    This function pushes embeddings to ChromaDB.
     """
     from app.models import Contact
     
@@ -169,7 +165,19 @@ def sync_embeddings_from_db(app, db_session):
         Contact.is_active == True
     ).all()
     
-    embeddings_db = []
+    # Get ChromaDB collection
+    try:
+        collection = get_face_collection()
+    except Exception as e:
+        return {"success": False, "error": f"Failed to connect to ChromaDB: {str(e)}"}
+    
+    count = 0
+    errors = []
+    
+    # Prepare batch data
+    ids = []
+    embeddings = []
+    metadatas = []
     
     for contact in contacts:
         if not contact.profile_photo or not os.path.exists(contact.profile_photo):
@@ -191,28 +199,29 @@ def sync_embeddings_from_db(app, db_session):
         # Use the first detected face for the profile
         data = data_list[0]
         
-        # Add to embeddings database
-        embeddings_db.append({
+        # Add to batch
+        ids.append(f"contact_{contact.id}")
+        embeddings.append(data["embedding"])
+        metadatas.append({
             "name": contact.name,
             "relation": contact.relationship_detail or contact.relationship,
-            "embedding": data["embedding"],
-            "contact_id": contact.id
+            "contact_id": contact.id,
+            "user_id": contact.user_id
         })
+        count += 1
     
-    # Save to embeddings.json
-    os.makedirs(PROFILES_DIR, exist_ok=True)
-    try:
-        with open(EMBEDDINGS_FILE, "w") as f:
-            json.dump(embeddings_db, f, indent=4)
-        
-        # Force cache invalidation by updating the global cache
-        global _embeddings_cache
-        _embeddings_cache["profiles"] = embeddings_db
-        _embeddings_cache["mtime"] = os.path.getmtime(EMBEDDINGS_FILE)
-        
-        print(f"Successfully synced {len(embeddings_db)} face embeddings from database")
-        print(f"Cache updated with {len(embeddings_db)} profiles")
-        return {"success": True, "count": len(embeddings_db)}
-    except Exception as e:
-        print(f"Error saving embeddings: {e}")
-        return {"success": False, "error": str(e)}
+    # Upsert to ChromaDB
+    if ids:
+        try:
+            collection.upsert(
+                ids=ids,
+                embeddings=embeddings,
+                metadatas=metadatas
+            )
+            print(f"Successfully synced {len(ids)} face embeddings to ChromaDB")
+            return {"success": True, "count": len(ids)}
+        except Exception as e:
+            print(f"Error upserting to ChromaDB: {e}")
+            return {"success": False, "error": str(e)}
+    else:
+        return {"success": True, "count": 0}
