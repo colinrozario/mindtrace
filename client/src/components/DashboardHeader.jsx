@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Search, Bell, Menu, Battery, Wifi, LogOut, X, User, MessageCircle, Clock, AlertTriangle, Phone, Home, Settings, HelpCircle, LayoutDashboard } from 'lucide-react';
 import { logout } from '../services/auth';
 import { userApi, alertsApi, searchApi } from '../services/api';
+import { formatTime12Hour } from '../utils/timeFormat';
 
 // Searchable pages index
 const PAGES_INDEX = [
@@ -347,7 +348,7 @@ const DashboardHeader = ({ onMenuClick }) => {
           )}
           {item.time && !item.timestamp && (
             <div className='text-xs text-gray-400 mt-1'>
-              {item.time} • {item.recurrence}
+              {formatTime12Hour(item.time)} • {item.recurrence}
             </div>
           )}
           {item.phone && (
