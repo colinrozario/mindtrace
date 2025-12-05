@@ -4,8 +4,14 @@ from datetime import datetime
 from typing import List, Dict, Optional
 
 class ConversationStore:
-    def __init__(self, storage_path: str = "data/conversations.json"):
-        self.storage_path = storage_path
+    def __init__(self, storage_path: str = None):
+        if storage_path is None:
+            # Resolves to server/data/conversations.json
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            self.storage_path = os.path.join(base_dir, "data", "conversations.json")
+        else:
+            self.storage_path = storage_path
+            
         self._ensure_storage()
 
     def _ensure_storage(self):

@@ -12,7 +12,11 @@ const FaceRecognition = () => {
     const [recognitionResult, setRecognitionResult] = useState(null);
     const intervalRef = useRef(null);
     const [debugStatus, setDebugStatus] = useState("Init...");
+    const lastResultRef = useRef(null);
+    const timeoutRef = useRef(null);
 
+    const [subtitle, setSubtitle] = useState("");
+    
     // Start Camera
     const startCamera = async () => {
         try {
@@ -78,14 +82,6 @@ const FaceRecognition = () => {
         const videoWidth = video.videoWidth;
         const videoHeight = video.videoHeight;
         
-        // We need to account for the fact that we sent a resized image
-        // BUT the bbox comes back relative to the resized image.
-        // Wait, InsightFace returns bbox in original image coordinates IF we sent original.
-        // But we sent 640px width. So bbox is relative to 640px width.
-        // We need to scale that back up to the video element's displayed size.
-        
-        // Actually, easiest way is to map bbox -> 0..1 coords -> screen coords
-        // The image we sent had dimensions:
         const MAX_WIDTH = 640;
         let sentWidth = videoWidth;
         let sentHeight = videoHeight;
@@ -133,20 +129,125 @@ const FaceRecognition = () => {
         };
     };
 
-    const timeoutRef = useRef(null);
-    const lastResultRef = useRef(null);
+    // --- Audio / ASR Logic ---
+    const audioContextRef = useRef(null);
+    const processorRef = useRef(null);
+    const audioInputRef = useRef(null);
+    const wsRef = useRef(null);
+    const isRecordingRef = useRef(false);
+
+    const startRecording = async (profileId) => {
+        if (isRecordingRef.current) return;
+        
+        try {
+            console.log("Starting ASR for:", profileId);
+            isRecordingRef.current = true;
+            
+            // Connect WebSocket
+            // Use standard WS URL construction based on current page or env
+            const wsUrl = `ws://localhost:8000/asr/${encodeURIComponent(profileId)}`;
+            wsRef.current = new WebSocket(wsUrl);
+            
+            wsRef.current.onopen = () => {
+                console.log("ASR WS Open");
+            };
+            
+            wsRef.current.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'subtitle') {
+                         setSubtitle(data.text);
+                    }
+                } catch (e) {
+                    console.error("WS Parse Err", e);
+                }
+            };
+            
+            wsRef.current.onerror = (e) => {
+                console.error("ASR WS Error", e);
+            };
+
+            // Start Audio
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            audioInputRef.current = audioContextRef.current.createMediaStreamSource(stream);
+            
+            // Create ScriptProcessor (bufferSize, inputChannels, outputChannels)
+            processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+            
+            processorRef.current.onaudioprocess = (e) => {
+                if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+                
+                const inputData = e.inputBuffer.getChannelData(0);
+                // Send raw float32 data
+                wsRef.current.send(inputData);
+            };
+            
+            audioInputRef.current.connect(processorRef.current);
+            processorRef.current.connect(audioContextRef.current.destination); // Needed for processing to happen
+            
+        } catch (err) {
+            console.error("Error starting audio:", err);
+            isRecordingRef.current = false;
+        }
+    };
+
+    const stopRecording = () => {
+        if (!isRecordingRef.current) return;
+        
+        console.log("Stopping ASR...");
+        isRecordingRef.current = false;
+        
+        // Clear subtitle shortly after stopping, or keep it?
+        // Let's keep it for a bit then clear
+        setTimeout(() => setSubtitle(""), 3000);
+        
+        if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+        }
+        
+        if (processorRef.current) {
+            processorRef.current.disconnect();
+            processorRef.current = null;
+        }
+        
+        if (audioInputRef.current) {
+            audioInputRef.current.disconnect(); 
+            audioInputRef.current = null;
+        }
+        
+        if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+        }
+    };
+
+    // --- End Audio Logic ---
+
+    useEffect(() => {
+        return () => {
+             stopRecording(); // Cleanup on unmount
+        }
+    }, []);
+
+    // ... existing refs and logic ...
 
     const processFrame = async () => {
         if (!loopActiveRef.current) return;
         
         if (isProcessingRef.current) {
-            // Should not happen with this design, but safety check
             requestAnimationFrame(processFrame);
             return;
         }
 
         if (!videoRef.current || videoRef.current.paused || videoRef.current.ended || videoRef.current.readyState < 2) {
-             // Wait a bit if video not ready
              setTimeout(processFrame, 100);
              return;
         }
@@ -167,7 +268,6 @@ const FaceRecognition = () => {
             const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/face/recognize`, formData);
             const data = response.data;
 
-            // Handle both single object (legacy) and array (new)
             const results = Array.isArray(data) ? data : [data];
             const validResults = results.filter(r => r);
 
@@ -181,32 +281,49 @@ const FaceRecognition = () => {
             if (processedResults.length > 0) {
                 setRecognitionResult(processedResults);
                 lastResultRef.current = processedResults;
+                
+                // --- ASR Trigger ---
+                // If we detect a face, start recording if not already
+                // Use the name of the first person detected as ID
+                const name = processedResults[0]?.name || "Unknown";
+                if (!isRecordingRef.current) {
+                    startRecording(name);
+                    setDebugStatus(`REC: ${name}`);
+                }
+                // -------------------
+
                 if (timeoutRef.current) {
                     clearTimeout(timeoutRef.current);
                     timeoutRef.current = null;
                 }
-                setDebugStatus(`OK: ${processedResults.length} faces`);
             } else {
+                setRecognitionResult([]);
                  if (lastResultRef.current && !timeoutRef.current) {
                     timeoutRef.current = setTimeout(() => {
-                        setRecognitionResult([]);
                         lastResultRef.current = null;
                         timeoutRef.current = null;
                         setDebugStatus("Cleared (Timeout)");
+                        
+                        // --- ASR Stop ---
+                        stopRecording();
+                        // ----------------
+                        
                     }, 1000);
                     setDebugStatus("Persisting");
-                } else if (!lastResultRef.current) {
-                     setRecognitionResult([]);
+                } else if (!lastResultRef || !lastResultRef.current) {
                      setDebugStatus("No Faces");
+                     
+                     // --- ASR Stop (Immediate if no persist) ---
+                     if (isRecordingRef.current) {
+                         stopRecording();
+                     }
+                     // ------------------------------------------
                 }
             }
         } catch (err) {
-            // console.error("Recognition error", err);
             setDebugStatus(`Err: ${err.message}`);
         } finally {
             isProcessingRef.current = false;
-            // Schedule next frame IMMEDIATELY after this one finishes
-            // This ensures max possible FPS without queueing
             if (loopActiveRef.current) {
                 requestAnimationFrame(processFrame);
             }
@@ -244,7 +361,7 @@ const FaceRecognition = () => {
             <canvas ref={canvasRef} className="hidden" />
 
             {/* HUD Overlay */}
-            <HUDOverlay mode={mode} recognitionResult={recognitionResult} debugStatus={debugStatus} />
+            <HUDOverlay mode={mode} recognitionResult={recognitionResult} debugStatus={debugStatus} subtitle={subtitle} />
 
             {/* Controls - Only visible in Standard Mode or on hover */}
             <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 transition-opacity duration-300 ${mode === 'rayban' ? 'opacity-0 hover:opacity-100' : 'opacity-100'}`}>

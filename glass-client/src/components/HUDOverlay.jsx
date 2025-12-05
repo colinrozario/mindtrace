@@ -1,7 +1,7 @@
 import React from 'react';
 import { Battery } from 'lucide-react';
 
-const HUDOverlay = ({ mode, recognitionResult, debugStatus }) => {
+const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
     const [time, setTime] = React.useState(new Date());
 
     React.useEffect(() => {
@@ -92,6 +92,16 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus }) => {
                         </div>
                     )
                 ))}
+                {/* Live Subtitles */}
+                {subtitle && (
+                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 max-w-2xl w-full text-center px-6">
+                         <div className="bg-white/90 backdrop-blur-md p-4 rounded-3xl border border-white/50 shadow-xl">
+                            <p className="text-gray-900 text-lg font-medium leading-relaxed tracking-wide">
+                                "{subtitle}"
+                            </p>
+                         </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -155,6 +165,17 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus }) => {
                     </div>
                 )
             ))}
+            
+            {/* Live Subtitles */}
+            {subtitle && (
+                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 max-w-2xl w-full text-center px-6">
+                     <div className="bg-black/60 backdrop-blur-md p-4 rounded-3xl border border-white/10 shadow-2xl">
+                        <p className="text-white text-lg font-medium leading-relaxed tracking-wide animate-pulse">
+                            "{subtitle}"
+                        </p>
+                     </div>
+                </div>
+            )}
         </div>
     );
 };
