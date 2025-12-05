@@ -58,8 +58,6 @@ origins = [
     GLASS_URL,
     "http://localhost:5173",
     "http://localhost:5174",
-    "https://mindtrace-rayban-glass.vercel.app",
-    "https://mindtrace-rayban.vercel.app"
 ]
 
 app.add_middleware(
