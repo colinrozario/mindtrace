@@ -37,6 +37,9 @@ const FaceRecognition = () => {
         }
     };
 
+    const isProcessingRef = useRef(false);
+    const loopActiveRef = useRef(false);
+
     const captureFrame = () => {
         if (videoRef.current && canvasRef.current) {
             const video = videoRef.current;
@@ -45,14 +48,24 @@ const FaceRecognition = () => {
 
             if (video.videoWidth === 0 || video.videoHeight === 0) return null;
 
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Resize to max 640px width to reduce bandwidth and server load
+            const MAX_WIDTH = 640;
+            let width = video.videoWidth;
+            let height = video.videoHeight;
+
+            if (width > MAX_WIDTH) {
+                height = Math.round((height * MAX_WIDTH) / width);
+                width = MAX_WIDTH;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            context.drawImage(video, 0, 0, width, height);
 
             return new Promise(resolve => {
                 canvas.toBlob(blob => {
                     resolve(blob);
-                }, 'image/jpeg');
+                }, 'image/jpeg', 0.8); // Add quality compression
             });
         }
         return null;
@@ -64,26 +77,53 @@ const FaceRecognition = () => {
         const video = videoRef.current;
         const videoWidth = video.videoWidth;
         const videoHeight = video.videoHeight;
+        
+        // We need to account for the fact that we sent a resized image
+        // BUT the bbox comes back relative to the resized image.
+        // Wait, InsightFace returns bbox in original image coordinates IF we sent original.
+        // But we sent 640px width. So bbox is relative to 640px width.
+        // We need to scale that back up to the video element's displayed size.
+        
+        // Actually, easiest way is to map bbox -> 0..1 coords -> screen coords
+        // The image we sent had dimensions:
+        const MAX_WIDTH = 640;
+        let sentWidth = videoWidth;
+        let sentHeight = videoHeight;
+        if (videoWidth > MAX_WIDTH) {
+            sentHeight = Math.round((videoHeight * MAX_WIDTH) / videoWidth);
+            sentWidth = MAX_WIDTH;
+        }
+
         const screenWidth = window.innerWidth;
         const screenHeight = window.innerHeight;
 
         // Calculate scale to maintain aspect ratio (object-cover)
         const scale = Math.max(screenWidth / videoWidth, screenHeight / videoHeight);
+        
+        // bbox is [x1, y1, x2, y2] based on sentWidth/sentHeight
+        const [x1, y1, x2, y2] = bbox;
 
-        const scaledWidth = videoWidth * scale;
-        const scaledHeight = videoHeight * scale;
+        // Normalize to 0..1
+        const nX1 = x1 / sentWidth;
+        const nY1 = y1 / sentHeight;
+        const nX2 = x2 / sentWidth;
+        const nY2 = y2 / sentHeight;
 
+        // Map to video element scale (which matches screen via object-cover usually)
+        // But object-cover cuts off parts.
+        
+        // Let's go step by step:
+        // 1. Video frame scaling to screen
+        const scaledWidth = videoWidth * scale; // Width of video on screen
+        const scaledHeight = videoHeight * scale; // Height of video on screen
         const xOffset = (screenWidth - scaledWidth) / 2;
         const yOffset = (screenHeight - scaledHeight) / 2;
 
-        // bbox is [x1, y1, x2, y2]
-        const [x1, y1, x2, y2] = bbox;
-
-        // Map to screen coordinates
-        const screenX = x1 * scale + xOffset;
-        const screenY = y1 * scale + yOffset;
-        const screenW = (x2 - x1) * scale;
-        const screenH = (y2 - y1) * scale;
+        // 2. Map normalized coords to scaled video dimensions
+        const screenX = nX1 * scaledWidth + xOffset;
+        const screenY = nY1 * scaledHeight + yOffset;
+        const screenW = (nX2 - nX1) * scaledWidth;
+        const screenH = (nY2 - nY1) * scaledHeight;
 
         return {
             left: screenX,
@@ -96,97 +136,88 @@ const FaceRecognition = () => {
     const timeoutRef = useRef(null);
     const lastResultRef = useRef(null);
 
-    const startRecognitionLoop = () => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setDebugStatus("Loop Started");
+    const processFrame = async () => {
+        if (!loopActiveRef.current) return;
+        
+        if (isProcessingRef.current) {
+            // Should not happen with this design, but safety check
+            requestAnimationFrame(processFrame);
+            return;
+        }
 
-        intervalRef.current = setInterval(async () => {
-            if (!videoRef.current) {
-                setDebugStatus("Wait: No Video Ref");
-                return;
-            }
-            if (videoRef.current.paused) {
-                setDebugStatus("Wait: Video Paused");
-                return;
-            }
-            if (videoRef.current.ended) {
-                setDebugStatus("Wait: Video Ended");
-                return;
-            }
-            if (videoRef.current.readyState < 2) {
-                setDebugStatus(`Wait: ReadyState ${videoRef.current.readyState}`);
-                return;
-            }
+        if (!videoRef.current || videoRef.current.paused || videoRef.current.ended || videoRef.current.readyState < 2) {
+             // Wait a bit if video not ready
+             setTimeout(processFrame, 100);
+             return;
+        }
 
+        isProcessingRef.current = true;
+        
+        try {
             const blob = await captureFrame();
             if (!blob) {
-                setDebugStatus("Wait: No Blob (Size 0?)");
+                isProcessingRef.current = false;
+                setTimeout(processFrame, 100);
                 return;
             }
 
             const formData = new FormData();
             formData.append('file', blob, 'frame.jpg');
 
-            try {
-                const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/face/recognize`, formData);
-                const data = response.data;
+            const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/face/recognize`, formData);
+            const data = response.data;
 
-                // Handle both single object (legacy) and array (new)
-                const results = Array.isArray(data) ? data : [data];
+            // Handle both single object (legacy) and array (new)
+            const results = Array.isArray(data) ? data : [data];
+            const validResults = results.filter(r => r);
 
-                // Filter out nulls/undefined, but KEEP "Unknown" faces
-                const validResults = results.filter(r => r);
-
-                // Process results to add positioning
-                const processedResults = validResults.map((result, idx) => {
-                    if (result.bbox) {
-                        const position = calculatePosition(result.bbox);
-                        return {
-                            ...result,
-                            position: position
-                        };
-                    }
-                    return result;
-                });
-
-                if (processedResults.length > 0) {
-                    // Faces detected: Update immediately and reset persistence
-                    setRecognitionResult(processedResults);
-                    lastResultRef.current = processedResults;
-                    
-                    // Clear any pending timeout since we have a valid result
-                    if (timeoutRef.current) {
-                        clearTimeout(timeoutRef.current);
-                        timeoutRef.current = null;
-                    }
-                    
-                    setDebugStatus(`OK: ${processedResults.length} faces`);
-                } else {
-                    // No faces detected: Check if we should persist the last result
-                    if (lastResultRef.current && !timeoutRef.current) {
-                        // Start the grace period timer if not already running
-                        timeoutRef.current = setTimeout(() => {
-                            setRecognitionResult([]);
-                            lastResultRef.current = null;
-                            timeoutRef.current = null;
-                            setDebugStatus("Cleared (Timeout)");
-                        }, 1000); // 1 second grace period
-                        
-                        setDebugStatus("Persisting (Grace Period)");
-                    } else if (!lastResultRef.current) {
-                        // No previous result to persist
-                         setRecognitionResult([]);
-                         setDebugStatus("No Faces");
-                    }
+            const processedResults = validResults.map((result) => {
+                if (result.bbox) {
+                    return { ...result, position: calculatePosition(result.bbox) };
                 }
+                return result;
+            });
 
-            } catch (err) {
-                console.error("Recognition error", err);
-                setDebugStatus(`Err: ${err.message}`);
-                // On error, we might want to keep persisting for a bit too, but for now let's be safe
-                // and only clear if we really lost tracking
+            if (processedResults.length > 0) {
+                setRecognitionResult(processedResults);
+                lastResultRef.current = processedResults;
+                if (timeoutRef.current) {
+                    clearTimeout(timeoutRef.current);
+                    timeoutRef.current = null;
+                }
+                setDebugStatus(`OK: ${processedResults.length} faces`);
+            } else {
+                 if (lastResultRef.current && !timeoutRef.current) {
+                    timeoutRef.current = setTimeout(() => {
+                        setRecognitionResult([]);
+                        lastResultRef.current = null;
+                        timeoutRef.current = null;
+                        setDebugStatus("Cleared (Timeout)");
+                    }, 1000);
+                    setDebugStatus("Persisting");
+                } else if (!lastResultRef.current) {
+                     setRecognitionResult([]);
+                     setDebugStatus("No Faces");
+                }
             }
-        }, 150);
+        } catch (err) {
+            // console.error("Recognition error", err);
+            setDebugStatus(`Err: ${err.message}`);
+        } finally {
+            isProcessingRef.current = false;
+            // Schedule next frame IMMEDIATELY after this one finishes
+            // This ensures max possible FPS without queueing
+            if (loopActiveRef.current) {
+                requestAnimationFrame(processFrame);
+            }
+        }
+    };
+
+    const startRecognitionLoop = () => {
+        if (loopActiveRef.current) return;
+        loopActiveRef.current = true;
+        setDebugStatus("Loop Started (Flow Control)");
+        processFrame(); 
     };
 
     useEffect(() => {
