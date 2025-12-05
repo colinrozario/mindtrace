@@ -26,6 +26,7 @@ from .routes.searchRoutes import router as search_router
 from .scheduler import scheduler
 
 CLIENT_URL = os.getenv("CLIENT_URL", "http://localhost:5173")
+GLASS_URL = os.getenv("GLASS_URL", "http://localhost:5174")
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-should-be-in-env")
 
 # Create Database Tables
@@ -54,8 +55,11 @@ app = FastAPI(
 
 origins = [
     CLIENT_URL,
+    GLASS_URL,
     "http://localhost:5173",
     "http://localhost:5174",
+    "https://mindtrace-rayban-glass.vercel.app",
+    "https://mindtrace-rayban.vercel.app"
 ]
 
 app.add_middleware(
