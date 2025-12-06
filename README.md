@@ -632,31 +632,10 @@ curl -X POST http://localhost:8000/face/recognize \
 - [ ] Test emergency SOS system end-to-end
 - [ ] Verify face recognition accuracy with test dataset
 
-### Docker Deployment (Coming Soon)
-
-```bash
-# Build and run with Docker Compose
-docker-compose up -d
-```
-
-### Cloud Deployment
-
-**Server Options:**
-- AWS EC2 + RDS (PostgreSQL) + S3 (photos)
-- Google Cloud Run + Cloud SQL + Cloud Storage
-- DigitalOcean App Platform + Managed PostgreSQL
-
-**Client Options:**
-- Vercel (recommended for React apps)
-- Netlify
-- AWS Amplify
-- Cloudflare Pages
-
----
 
 ## Contributing
 
-We welcome contributions! Please follow these guidelines:
+We welcome contributions! Please follow these guidelines for contributions:
 
 ### Development Workflow
 
@@ -715,39 +694,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Inspiration
 - [Ray-Ban Meta Smart Glasses](https://www.meta.com/smart-glasses/) - Wearable computing platform
-
----
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/mindtrace/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/mindtrace/discussions)
-- **Email**: support@mindtrace.dev
-
----
-
-## Roadmap
-
-### v1.1 (Q1 2025)
-- [ ] Voice command activation ("Hey MindTrace")
-- [ ] Offline face recognition mode
-- [ ] Multi-language ASR support (Spanish, French, German)
-- [ ] Mobile companion app (iOS/Android)
-
-### v1.2 (Q2 2025)
-- [ ] Apple Watch / WearOS integration
-- [ ] Health tracking device integration (Fitbit, Apple Health)
-- [ ] Advanced conversation analytics
-- [ ] Custom wake word training
-
-### v2.0 (Q3 2025)
-- [ ] On-device ML inference (TensorFlow Lite)
-- [ ] Federated learning for privacy
-- [ ] Multi-user support for families
-- [ ] Integration with smart home devices
-
----
-
 
 ---
 
