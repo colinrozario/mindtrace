@@ -5,10 +5,10 @@ import toast from 'react-hot-toast';
 
 const InteractionHistory = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMood, setSelectedMood] = useState('all');
+
   const [selectedInteraction, setSelectedInteraction] = useState(null);
   const [starredOnly, setStarredOnly] = useState(false);
-  
+
   const [interactions, setInteractions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -19,10 +19,10 @@ const InteractionHistory = () => {
     try {
       const userResponse = await userApi.getProfile();
       const userId = userResponse.data.id;
-      
+
       const response = await asrApi.syncConversations(userId);
       toast.success(response.data.message || 'Conversations synced successfully');
-      
+
       // Also sync to ChromaDB for embeddings
       try {
         await interactionsApi.syncToChroma();
@@ -30,7 +30,7 @@ const InteractionHistory = () => {
       } catch (err) {
         console.error("Error syncing to ChromaDB:", err);
       }
-      
+
       // Refresh interactions after sync
       fetchInteractions();
     } catch (error) {
@@ -44,26 +44,24 @@ const InteractionHistory = () => {
   const fetchInteractions = async () => {
     try {
       setLoading(true);
-      
+
       // Use semantic search if query is long enough and semantic search is enabled
       if (useSemanticSearch && searchQuery && searchQuery.length > 3) {
         const response = await interactionsApi.search(searchQuery, 50);
         let results = response.data.results || [];
-        
+
         // Apply additional filters
-        if (selectedMood !== 'all') {
-          results = results.filter(i => i.mood === selectedMood);
-        }
+
         if (starredOnly) {
           results = results.filter(i => i.starred);
         }
-        
+
         setInteractions(results);
       } else {
         // Use regular database query
         const params = {
           search: searchQuery,
-          mood: selectedMood !== 'all' ? selectedMood : undefined,
+
           starred: starredOnly ? true : undefined
         };
         const response = await interactionsApi.getAll(params);
@@ -83,7 +81,7 @@ const InteractionHistory = () => {
       fetchInteractions();
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchQuery, selectedMood, starredOnly, useSemanticSearch]);
+  }, [searchQuery, starredOnly, useSemanticSearch]);
 
   const handleToggleStar = async (e, id) => {
     e.stopPropagation();
@@ -93,7 +91,7 @@ const InteractionHistory = () => {
       loading: 'Updating interaction...',
       success: () => {
         // Optimistic update or refetch
-        setInteractions(interactions.map(i => 
+        setInteractions(interactions.map(i =>
           i.id === id ? { ...i, starred: !i.starred } : i
         ));
         if (selectedInteraction && selectedInteraction.id === id) {
@@ -182,7 +180,7 @@ const InteractionHistory = () => {
                   transition-all duration-200"
               />
             </div>
-            
+
             {/* Semantic Search Toggle */}
             <button
               onClick={() => setUseSemanticSearch(!useSemanticSearch)}
@@ -199,25 +197,11 @@ const InteractionHistory = () => {
               AI Search
             </button>
           </div>
-          
+
           {/* Filters Row */}
           <div className="flex flex-col md:flex-row gap-4">
 
-            {/* Mood Filter */}
-            <select
-              value={selectedMood}
-              onChange={(e) => setSelectedMood(e.target.value)}
-              className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl
-                focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent
-                transition-all duration-200 cursor-pointer"
-            >
-              <option value="all">All Moods</option>
-              <option value="happy">Happy</option>
-              <option value="neutral">Neutral</option>
-              <option value="sad">Sad</option>
-              <option value="anxious">Anxious</option>
-              <option value="confused">Confused</option>
-            </select>
+
 
             {/* Starred Filter */}
             <button
