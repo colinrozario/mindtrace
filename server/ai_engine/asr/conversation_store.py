@@ -81,6 +81,7 @@ class ConversationStore:
                     pass
         
         # Save to ChromaDB if collection is available
+        # ChromaDB will automatically generate embeddings for semantic search
         if self.chroma_collection and interaction_id:
             try:
                 # Ensure metadata values are JSON-serializable
@@ -94,16 +95,20 @@ class ConversationStore:
                     "mood": "neutral"
                 }
                 
+                # Add to ChromaDB - this will automatically generate embeddings
+                # using the default embedding function (all-MiniLM-L6-v2)
                 self.chroma_collection.add(
                     ids=[f"interaction_{interaction_id}"],
                     documents=[transcript],
                     metadatas=[metadata]
                 )
                 print(f"✓ Saved conversation to ChromaDB with ID interaction_{interaction_id}")
+                print(f"✓ Voice-to-text embeddings generated and stored for semantic search")
             except Exception as e:
                 print(f"⚠ Error saving conversation to ChromaDB: {e}")
                 import traceback
                 traceback.print_exc()
+                # Don't fail the entire operation if ChromaDB fails
         elif self.chroma_collection and not interaction_id:
             print(f"⚠ Skipping ChromaDB save: no interaction_id (database save may have failed)")
         elif not self.chroma_collection:

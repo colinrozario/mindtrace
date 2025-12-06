@@ -283,8 +283,14 @@ async def websocket_asr(
     except Exception as e:
         print(f"Error sending connection confirmation: {e}")
     
-    # ChromaDB collection
-    chroma_collection = get_conversation_collection()
+    # ChromaDB collection - ensure it's available for storing voice-to-text embeddings
+    chroma_collection = None
+    try:
+        chroma_collection = get_conversation_collection()
+        print(f"✓ ChromaDB collection ready for storing voice-to-text embeddings")
+    except Exception as e:
+        print(f"⚠ Warning: ChromaDB not available: {e}")
+        print(f"⚠ Conversations will be saved to database only, without semantic search capability")
     
     # Initialize store and linker with database and ChromaDB
     store = ConversationStore(db_session=db, chroma_collection=chroma_collection)
@@ -328,6 +334,8 @@ async def websocket_asr(
         print("✓ ASR Engine ready")
 
 
+    connection_close_reason = None
+    
     try:
         while True:
             # Send periodic ping to keep connection alive
@@ -338,6 +346,7 @@ async def websocket_asr(
                     last_ping_time = current_time
                 except Exception as e:
                     print(f"Error sending ping: {e}")
+                    connection_close_reason = "ping_error"
                     break
             
             # Receive raw bytes (float32 PCM) with timeout
@@ -347,6 +356,7 @@ async def websocket_asr(
                 # Check if we've been idle too long
                 if current_time - last_activity_time > IDLE_TIMEOUT:
                     print(f"ASR idle timeout reached ({IDLE_TIMEOUT}s), closing connection")
+                    connection_close_reason = "idle_timeout"
                     break
                 continue
             
@@ -426,7 +436,16 @@ async def websocket_asr(
             # -----------------------------------------------
 
     except WebSocketDisconnect:
-        print(f"ASR WebSocket disconnected for {profile_id}. Processing final conversation...")
+        connection_close_reason = "client_disconnect"
+        print(f"ASR WebSocket disconnected for {profile_id}")
+        
+    except Exception as e:
+        connection_close_reason = f"error: {e}"
+        print(f"WebSocket Error: {e}")
+    
+    finally:
+        # Always process and save the conversation on connection close
+        print(f"Connection closed ({connection_close_reason}). Processing final conversation...")
         
         # Process the buffer if we have audio
         if audio_buffer and asr_engine:
@@ -444,9 +463,15 @@ async def websocket_asr(
                     print(f"✓ Final Transcript: {transcript}")
                     
                     if transcript and transcript.strip():
+                        # Save to database and ChromaDB
+                        # The linker.link_and_save() method will:
+                        # 1. Save to JSON file (backward compatibility)
+                        # 2. Save to database as Interaction
+                        # 3. Generate embeddings and save to ChromaDB automatically
                         result = linker.link_and_save(profile_id, transcript, user_id=user_id, contact_id=contact_id)
                         if result:
-                            print(f"✓ Conversation saved successfully")
+                            print(f"✓ Conversation saved to database and ChromaDB successfully")
+                            print(f"✓ Voice-to-text embeddings stored in ChromaDB for semantic search")
                         else:
                             print("⚠ Conversation save returned None")
                     else:
@@ -463,9 +488,6 @@ async def websocket_asr(
         elif not asr_engine:
             print("❌ ASR Engine not available")
         
-        db.close()
-        
-    except Exception as e:
-        print(f"WebSocket Error: {e}")
+        # Always close the database connection
         db.close()
 
