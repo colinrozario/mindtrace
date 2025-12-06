@@ -8,12 +8,13 @@ def get_chroma_client():
     """
     Get a singleton ChromaDB client instance.
     Uses environment variables for configuration.
+    Connection is cached for performance.
     """
     host = os.getenv("CHROMA_HOST", "localhost")
     port = os.getenv("CHROMA_PORT", "8000")
-    api_key = os.getenv("CHROMA_API_KEY")
-    tenant = os.getenv("CHROMA_TENANT", "default_tenant")
-    database = os.getenv("CHROMA_DATABASE", "default_database")
+    api_key = os.getenv("CHROMA_API_KEY", "").strip("'\"")  # Remove quotes if present
+    tenant = os.getenv("CHROMA_TENANT", "default_tenant").strip("'\"")
+    database = os.getenv("CHROMA_DATABASE", "default_database").strip("'\"")
     
     print(f"Connecting to ChromaDB at {host}:{port} (Tenant: {tenant}, Database: {database})")
     
@@ -23,6 +24,12 @@ def get_chroma_client():
             # For cloud ChromaDB (api.trychroma.com), use SSL
             ssl = host == "api.trychroma.com" or port == "443"
             
+            # Configure settings
+            settings = Settings(
+                allow_reset=True,
+                anonymized_telemetry=False
+            )
+            
             client = chromadb.HttpClient(
                 host=host,
                 port=int(port),
@@ -30,21 +37,29 @@ def get_chroma_client():
                 headers={"X-Chroma-Token": api_key},
                 tenant=tenant,
                 database=database,
-                settings=Settings(allow_reset=True, anonymized_telemetry=False)
+                settings=settings
             )
         else:
             # Fallback to HttpClient without auth
+            settings = Settings(
+                allow_reset=True,
+                anonymized_telemetry=False
+            )
+            
             client = chromadb.HttpClient(
                 host=host,
                 port=int(port),
                 tenant=tenant,
                 database=database,
-                settings=Settings(allow_reset=True, anonymized_telemetry=False)
+                settings=settings
             )
             
+        # Test connection
+        client.heartbeat()
+        print(f"✓ ChromaDB connection established successfully")
         return client
     except Exception as e:
-        print(f"Error connecting to ChromaDB: {e}")
+        print(f"✗ Error connecting to ChromaDB: {e}")
         raise e
 
 def get_face_collection():

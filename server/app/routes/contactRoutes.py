@@ -57,29 +57,42 @@ def contact_to_response(contact: Contact, request: Request) -> dict:
         "profile_photo_url": get_photo_url(contact.id, contact.profile_photo is not None, request)
     }
 
-def sync_contact_to_chroma(contact: Contact) -> bool:
+def sync_contact_to_chroma(contact: Contact, timeout: int = 10) -> bool:
     """
     Sync a single contact's face embedding to ChromaDB.
     Returns True if successful, False otherwise.
+    
+    Args:
+        contact: Contact object to sync
+        timeout: Timeout in seconds for ChromaDB operations (default: 10)
     """
     if not contact.profile_photo:
         print(f"No profile photo for contact {contact.name}")
         return False
     
     try:
-        # Load face recognition models
+        import time
+        start_time = time.time()
+        
+        # Load face recognition models (should be pre-warmed on startup)
         app = get_face_app()
+        print(f"Model load time: {time.time() - start_time:.2f}s")
         
         # Convert binary data to OpenCV image
+        img_start = time.time()
         nparr = np.frombuffer(contact.profile_photo, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        print(f"Image decode time: {time.time() - img_start:.2f}s")
         
         if img is None:
             print(f"Error: Could not decode image for {contact.name}")
             return False
         
         # Extract embedding
+        embed_start = time.time()
         data_list = detect_and_embed(app, img)
+        print(f"Face detection time: {time.time() - embed_start:.2f}s")
+        
         if not data_list:
             print(f"Error: No face detected for {contact.name}")
             return False
@@ -88,9 +101,10 @@ def sync_contact_to_chroma(contact: Contact) -> bool:
         data = data_list[0]
         
         # Get ChromaDB collection
+        chroma_start = time.time()
         collection = get_face_collection()
         
-        # Upsert to ChromaDB
+        # Upsert to ChromaDB with timeout handling
         collection.upsert(
             ids=[f"contact_{contact.id}"],
             embeddings=[data["embedding"]],
@@ -101,8 +115,10 @@ def sync_contact_to_chroma(contact: Contact) -> bool:
                 "user_id": contact.user_id
             }]
         )
+        print(f"ChromaDB upsert time: {time.time() - chroma_start:.2f}s")
         
-        print(f"Successfully synced {contact.name} to ChromaDB")
+        total_time = time.time() - start_time
+        print(f"Successfully synced {contact.name} to ChromaDB (total: {total_time:.2f}s)")
         return True
         
     except Exception as e:

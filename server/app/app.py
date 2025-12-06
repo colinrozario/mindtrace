@@ -37,6 +37,15 @@ Base.metadata.create_all(bind=engine)
 # Lifespan context manager for startup and shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup: Pre-load face recognition models to avoid cold start delays
+    try:
+        from .routes.contactRoutes import get_face_app
+        print("Pre-loading face recognition models...")
+        get_face_app()
+        print("✓ Face recognition models loaded successfully")
+    except Exception as e:
+        print(f"⚠ Warning: Failed to pre-load face recognition models: {e}")
+    
     # Startup: Start the reminder scheduler
     scheduler_task = asyncio.create_task(scheduler.start())
     yield
