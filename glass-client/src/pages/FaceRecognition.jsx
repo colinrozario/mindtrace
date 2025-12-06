@@ -17,6 +17,7 @@ const FaceRecognition = () => {
 
     const [subtitle, setSubtitle] = useState("");
     const [userId, setUserId] = useState(null);
+    const userIdRef = useRef(null); // Use ref to avoid stale closure
 
     // Extract token from URL on mount and fetch user profile
     useEffect(() => {
@@ -38,8 +39,13 @@ const FaceRecognition = () => {
         // Fetch user profile to get user_id
         const fetchUserProfile = async () => {
             try {
+                console.log("Fetching user profile...");
                 const response = await userApi.getProfile();
-                setUserId(response.data.id);
+                console.log("User profile response:", response.data);
+                const id = response.data.id;
+                setUserId(id);
+                userIdRef.current = id; // Store in ref for immediate access
+                console.log("User ID set to:", id);
                 setDebugStatus("User loaded");
             } catch (error) {
                 console.error("Error fetching user profile:", error);
@@ -172,33 +178,61 @@ const FaceRecognition = () => {
     const isRecordingRef = useRef(false);
 
     const startRecording = async (profileId) => {
-        if (isRecordingRef.current || !userId) return;
+        if (isRecordingRef.current) {
+            console.log("ASR already recording, skipping...");
+            return;
+        }
+        
+        const currentUserId = userIdRef.current; // Use ref
+        if (!currentUserId) {
+            console.error("Cannot start ASR: userId is null");
+            setDebugStatus("No User ID");
+            return;
+        }
         
         try {
-            console.log("Starting ASR for:", profileId);
+            console.log("=== Starting ASR ===");
+            console.log("Profile ID:", profileId);
+            console.log("User ID:", currentUserId);
             isRecordingRef.current = true;
             
             // Connect WebSocket with user_id
-            // Use environment variable for WebSocket URL
             const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
             const token = localStorage.getItem('token');
-            const wsUrl = apiBaseUrl.replace(/^http/, 'ws') + `/asr/${userId}/${encodeURIComponent(profileId)}?token=${token}`;
-            console.log("Connecting to WebSocket:", wsUrl);
+            
+            if (!token) {
+                console.error("No authentication token found");
+                setDebugStatus("No Auth Token");
+                isRecordingRef.current = false;
+                return;
+            }
+            
+            const wsUrl = apiBaseUrl.replace(/^http/, 'ws') + `/asr/${currentUserId}/${encodeURIComponent(profileId)}?token=${encodeURIComponent(token)}`;
+            console.log("Connecting to ASR WebSocket:", wsUrl.replace(token, '[TOKEN]'));
+            
             wsRef.current = new WebSocket(wsUrl);
             
             wsRef.current.onopen = () => {
-                console.log("ASR WebSocket connected successfully");
+                console.log("✓ ASR WebSocket connected successfully");
                 setDebugStatus(`ASR: ${profileId}`);
             };
             
             wsRef.current.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+                    console.log("WebSocket message received:", data);
+                    
                     if (data.type === 'subtitle') {
+                        console.log("Subtitle:", data.text);
                         setSubtitle(data.text);
+                    } else if (data.type === 'error') {
+                        console.error("Server error:", data.message);
+                        setDebugStatus(`Error: ${data.message}`);
+                    } else if (data.type === 'connected') {
+                        console.log("Connection confirmed:", data.message);
                     }
                 } catch (e) {
-                    console.error("WebSocket parse error:", e);
+                    console.error("WebSocket parse error:", e, "Raw data:", event.data);
                 }
             };
             
@@ -213,11 +247,15 @@ const FaceRecognition = () => {
                     setDebugStatus("ASR Auth Fail");
                 } else if (e.code !== 1000) {
                     setDebugStatus(`ASR Closed: ${e.code}`);
+                } else {
+                    setDebugStatus("ASR Disconnected");
                 }
+                isRecordingRef.current = false;
             };
 
             // Start Audio
             try {
+                console.log("Requesting microphone access...");
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
                         echoCancellation: true,
@@ -227,54 +265,73 @@ const FaceRecognition = () => {
                     }
                 });
                 
-                // Initialize Audio Context
-                audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                console.log("Microphone access granted");
+                
+                // Initialize Audio Context with 16kHz sample rate
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioContextRef.current = new AudioContextClass({ sampleRate: 16000 });
+                
+                console.log(`AudioContext created with sample rate: ${audioContextRef.current.sampleRate}`);
                 
                 // Handle Suspended State (Autoplay Policy)
                 if (audioContextRef.current.state === 'suspended') {
                     console.warn("AudioContext suspended! Attempting resume...");
-                    setDebugStatus("CLICK TO ENABLE AUDIO"); // Request user interaction
+                    setDebugStatus("CLICK TO ENABLE AUDIO");
                     
-                     // Try immediate resume
+                    // Try immediate resume
                     try {
                         await audioContextRef.current.resume();
+                        console.log("AudioContext resumed successfully");
                     } catch (e) {
-                         // Will need a button press mostly
+                        console.error("Failed to resume AudioContext:", e);
                     }
                 }
                 
                 audioInputRef.current = audioContextRef.current.createMediaStreamSource(stream);
                 
-                // standard BufferSize 4096 is good for ~0.25s chunks at 16k
-                // 4096 / 16000 = 0.256s
+                // Use 4096 buffer size for ~0.25s chunks at 16kHz
                 processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
                 
                 processorRef.current.onaudioprocess = (e) => {
-                    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+                    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+                        return;
+                    }
                     
                     const inputData = e.inputBuffer.getChannelData(0);
-                    // Send raw float32 data
-                    // We need to filter out silence on client side? 
-                    // No, let server VAD handle it to keep client dummy.
                     
-                     // Downsample if needed? No, context is already 16000 if supported.
-                     // But verify sample rate.
-                    wsRef.current.send(inputData);
+                    // Convert Float32Array to ArrayBuffer for WebSocket transmission
+                    // The backend expects raw float32 bytes
+                    const buffer = new ArrayBuffer(inputData.length * 4);
+                    const view = new Float32Array(buffer);
+                    view.set(inputData);
+                    
+                    try {
+                        wsRef.current.send(buffer);
+                    } catch (sendErr) {
+                        console.error("Error sending audio data:", sendErr);
+                    }
                 };
                 
                 audioInputRef.current.connect(processorRef.current);
                 processorRef.current.connect(audioContextRef.current.destination);
                 
+                console.log("Audio pipeline connected successfully");
                 setDebugStatus(`REC: ${profileId}`);
 
             } catch (err) {
                 console.error("Audio Init Error:", err);
-                setDebugStatus("Mic Error");
+                setDebugStatus(`Mic Error: ${err.message}`);
                 isRecordingRef.current = false;
-                if (wsRef.current) wsRef.current.close();
+                if (wsRef.current) {
+                    wsRef.current.close();
+                    wsRef.current = null;
+                }
             }
         } catch (outerErr) {
-            console.error("Outer Error in startRecording:", outerErr);
+            console.error("=== CRITICAL ERROR in startRecording ===");
+            console.error("Error:", outerErr);
+            console.error("Stack:", outerErr.stack);
+            setDebugStatus(`ASR Error: ${outerErr.message}`);
             isRecordingRef.current = false;
         }
     };
@@ -375,9 +432,16 @@ const FaceRecognition = () => {
                 // If we detect a face, start recording if not already
                 // Use the name of the first person detected as ID
                 const name = processedResults[0]?.name || "Unknown";
-                if (!isRecordingRef.current) {
+                const currentUserId = userIdRef.current; // Use ref to get current value
+                console.log(`[ASR CHECK] Face detected: ${name}, isRecording: ${isRecordingRef.current}, userId: ${currentUserId}`);
+                
+                if (!isRecordingRef.current && currentUserId) {
+                    console.log(`Face detected: ${name}, starting ASR...`);
                     startRecording(name);
-                    setDebugStatus(`REC: ${name}`);
+                } else if (!currentUserId) {
+                    console.warn("Cannot start ASR: userId not available yet");
+                } else if (isRecordingRef.current) {
+                    console.log("ASR already recording");
                 }
                 // -------------------
 

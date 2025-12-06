@@ -117,7 +117,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                 <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full border border-white/10">
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                     <span className="text-sm font-medium">REC</span>
-                    <span className="text-sm font-mono ml-2 opacity-80">00:14</span>
+                    <span className="text-sm font-mono ml-2 opacity-80">Live</span>
                 </div>
                 <div className="flex items-center gap-3 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full border border-white/10">
                     <Battery className="w-5 h-5" />

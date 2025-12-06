@@ -271,7 +271,16 @@ async def websocket_asr(
         return
 
     await websocket.accept()
-    print(f"ASR WebSocket connected for user {user_id}, profile: {profile_id}")
+    print(f"✓ ASR WebSocket connected for user {user_id}, profile: {profile_id}")
+    
+    # Send confirmation message
+    try:
+        await websocket.send_json({
+            "type": "connected",
+            "message": f"ASR ready for {profile_id}"
+        })
+    except Exception as e:
+        print(f"Error sending connection confirmation: {e}")
     
     # ChromaDB collection
     chroma_collection = get_conversation_collection()
@@ -296,11 +305,12 @@ async def websocket_asr(
     
     audio_buffer = []
     chunk_counter = 0
+    total_chunks_received = 0
     TRANSCRIBE_INTERVAL_CHUNKS = 3 # Approx 0.75 second (Faster updates)
     RMS_THRESHOLD = 0.001 # Reduced threshold for better sensitivity
 
     if not asr_engine:
-        print("Error: ASR Engine is not initialized")
+        print("❌ Error: ASR Engine is not initialized")
         try:
             await websocket.send_json({
                 "type": "error",
@@ -308,6 +318,8 @@ async def websocket_asr(
             })
         except:
             pass
+    else:
+        print("✓ ASR Engine ready")
 
 
     try:
@@ -315,10 +327,25 @@ async def websocket_asr(
             # Receive raw bytes (float32 PCM)
             data = await websocket.receive_bytes()
             
+            if len(data) == 0:
+                continue
+            
             # Convert bytes to numpy array (float32)
-            chunk = np.frombuffer(data, dtype=np.float32)
-            audio_buffer.append(chunk)
-            chunk_counter += 1
+            try:
+                chunk = np.frombuffer(data, dtype=np.float32)
+                if len(chunk) == 0:
+                    continue
+                
+                total_chunks_received += 1
+                audio_buffer.append(chunk)
+                chunk_counter += 1
+                
+                # Log every 10 chunks to avoid spam
+                if total_chunks_received % 10 == 0:
+                    print(f"Received {total_chunks_received} audio chunks ({len(chunk)} samples each)")
+            except Exception as e:
+                print(f"Error converting audio data: {e}")
+                continue
             
             # --- Incremental Transcription for Subtitles ---
             if chunk_counter >= TRANSCRIBE_INTERVAL_CHUNKS and asr_engine:
@@ -334,35 +361,39 @@ async def websocket_asr(
                     # If buffer exceeds max size, trim from the beginning
                     if len(current_full) > MAX_BUFFER_SAMPLES:
                         current_full = current_full[-MAX_BUFFER_SAMPLES:]
-                        # Re-pack into buffer list to avoid re-concatenating excessively huge arrays next time
-                        # Ideally, we should use a proper RingBuffer, but resetting audio_buffer to [current_full] is safer for now
                         audio_buffer = [current_full]
 
                     # Transcribe window: Last 5 seconds (80000 samples)
-                    # We need enough context, but not too much latency
                     SAMPLES_FOR_TRANSCRIPTION = 80000 
                     transcribe_window = current_full[-SAMPLES_FOR_TRANSCRIPTION:] if len(current_full) > SAMPLES_FOR_TRANSCRIPTION else current_full
                     
                     # VAD: Check Energy Level (RMS)
                     rms = np.sqrt(np.mean(transcribe_window**2))
-                    # print(f"Audio RMS: {rms:.5f}") # Debug VAD
                     
                     if len(transcribe_window) > 4800 and rms > RMS_THRESHOLD:
-                         # Only transcribe if we haven't just transcribed this exact segment? 
-                         # For subtitles, re-transcribing the growing window is actually desired to stabilize text.
+                        print(f"Transcribing {len(transcribe_window)} samples (RMS: {rms:.5f})...")
                         transcript = asr_engine.transcribe_audio_chunk(transcribe_window)
                         if transcript:
-                            print(f"Partial Transcript ({rms:.4f}): {transcript}")
+                            print(f"✓ Partial Transcript: {transcript}")
                             await websocket.send_json({
                                 "type": "subtitle",
                                 "text": transcript
                             })
+                        else:
+                            print("Empty transcript returned")
+                    else:
+                        if len(transcribe_window) <= 4800:
+                            print(f"Buffer too small: {len(transcribe_window)} samples")
+                        else:
+                            print(f"Audio too quiet: RMS {rms:.5f} < {RMS_THRESHOLD}")
                 except Exception as e:
                     print(f"Incremental transcribe error: {e}")
+                    import traceback
+                    traceback.print_exc()
             # -----------------------------------------------
 
     except WebSocketDisconnect:
-        print(f"ASR WebSocket disconnected for {profile_id}. Transcribing full conversation...")
+        print(f"ASR WebSocket disconnected for {profile_id}. Processing final conversation...")
         
         # Process the buffer if we have audio
         if audio_buffer and asr_engine:
@@ -370,22 +401,34 @@ async def websocket_asr(
                 # Concatenate all chunks
                 full_audio = np.concatenate(audio_buffer)
                 
-                print(f"Total audio samples: {len(full_audio)}")
+                duration_seconds = len(full_audio) / 16000
+                print(f"Total audio: {len(full_audio)} samples ({duration_seconds:.2f} seconds)")
+                print(f"Total chunks received: {total_chunks_received}")
                 
                 if len(full_audio) > 4800: # Ensure at least 0.3 seconds of audio
-                    print(f"Final Processing of {len(full_audio)} samples")
+                    print(f"Transcribing final audio...")
                     transcript = asr_engine.transcribe_audio_chunk(full_audio)
-                    print(f"Final Transcript: {transcript}")
+                    print(f"✓ Final Transcript: {transcript}")
                     
-                    if transcript:
-                        linker.link_and_save(profile_id, transcript, user_id=user_id, contact_id=contact_id)
+                    if transcript and transcript.strip():
+                        result = linker.link_and_save(profile_id, transcript, user_id=user_id, contact_id=contact_id)
+                        if result:
+                            print(f"✓ Conversation saved successfully")
+                        else:
+                            print("⚠ Conversation save returned None")
+                    else:
+                        print("⚠ Empty transcript, not saving")
                 else:
-                    print("Audio too short to transcribe.")
+                    print(f"⚠ Audio too short to transcribe ({duration_seconds:.2f}s)")
                     
             except Exception as e:
-                print(f"Error processing audio buffer: {e}")
+                print(f"❌ Error processing audio buffer: {e}")
                 import traceback
                 traceback.print_exc()
+        elif not audio_buffer:
+            print("⚠ No audio data received")
+        elif not asr_engine:
+            print("❌ ASR Engine not available")
         
         db.close()
         
