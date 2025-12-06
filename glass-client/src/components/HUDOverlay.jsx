@@ -68,7 +68,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                 {/* Bounding Boxes for all detected faces */}
                 {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.map((result, index) => (
                     result.position && (
-                        <div 
+                        <div
                             key={`bbox-${result.name}-${result.confidence}-${index}`}
                             style={{
                                 position: 'absolute',
@@ -92,27 +92,27 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                         </div>
                     )
                 ))}
-                
+
                 {/* Info message when Unknown faces are detected */}
-                {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.length > 0 && 
-                 recognitionResult.every(r => r.name === 'Unknown') && (
-                    <div className="absolute bottom-32 left-1/2 -translate-x-1/2 max-w-md">
-                        <div className="bg-indigo-600/90 backdrop-blur-md px-6 py-3 rounded-2xl border border-indigo-400/50 shadow-xl">
-                            <p className="text-white text-sm font-medium text-center">
-                                💡 Upload contacts with photos to identify faces
-                            </p>
+                {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.length > 0 &&
+                    recognitionResult.every(r => r.name === 'Unknown') && (
+                        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 max-w-md">
+                            <div className="bg-indigo-600/90 backdrop-blur-md px-6 py-3 rounded-2xl border border-indigo-400/50 shadow-xl">
+                                <p className="text-white text-sm font-medium text-center">
+                                    💡 Upload contacts with photos to identify faces
+                                </p>
+                            </div>
                         </div>
-                    </div>
-                )}
-                
+                    )}
+
                 {/* Live Subtitles */}
                 {subtitle && (
                     <div className="absolute bottom-20 left-1/2 -translate-x-1/2 max-w-2xl w-full text-center px-6">
-                         <div className="bg-white/90 backdrop-blur-md p-4 rounded-3xl border border-white/50 shadow-xl">
+                        <div className="bg-white/90 backdrop-blur-md p-4 rounded-3xl border border-white/50 shadow-xl">
                             <p className="text-gray-900 text-lg font-medium leading-relaxed tracking-wide">
                                 "{subtitle}"
                             </p>
-                         </div>
+                        </div>
                     </div>
                 )}
             </div>
@@ -129,8 +129,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
             <div className="absolute top-8 right-8 flex items-center gap-4 text-white/90 font-medium">
                 <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full border border-white/10">
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-sm font-medium">REC</span>
-                    <span className="text-sm font-mono ml-2 opacity-80">Live</span>
+                    <span className="text-sm font-medium">LIVE</span>
                 </div>
                 <div className="flex items-center gap-3 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full border border-white/10">
                     <Battery className="w-5 h-5" />
@@ -148,7 +147,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
             {/* Bounding Boxes for all detected faces */}
             {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.map((result, index) => (
                 result.position && (
-                    <div 
+                    <div
                         key={`bbox-${result.name}-${result.confidence}-${index}`}
                         style={{
                             position: 'absolute',
@@ -178,27 +177,27 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                     </div>
                 )
             ))}
-            
+
             {/* Info message when Unknown faces are detected */}
-            {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.length > 0 && 
-             recognitionResult.every(r => r.name === 'Unknown') && (
-                <div className="absolute bottom-32 left-1/2 -translate-x-1/2 max-w-md">
-                    <div className="bg-white/10 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/20 shadow-xl">
-                        <p className="text-white text-sm font-medium text-center">
-                            💡 Upload contacts with photos to identify faces
-                        </p>
+            {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.length > 0 &&
+                recognitionResult.every(r => r.name === 'Unknown') && (
+                    <div className="absolute bottom-32 left-1/2 -translate-x-1/2 max-w-md">
+                        <div className="bg-white/10 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/20 shadow-xl">
+                            <p className="text-white text-sm font-medium text-center">
+                                💡 Upload contacts with photos to identify faces
+                            </p>
+                        </div>
                     </div>
-                </div>
-            )}
-            
+                )}
+
             {/* Live Subtitles */}
             {subtitle && (
                 <div className="absolute bottom-20 left-1/2 -translate-x-1/2 max-w-2xl w-full text-center px-6">
-                     <div className="bg-black/60 backdrop-blur-md p-4 rounded-3xl border border-white/10 shadow-2xl">
+                    <div className="bg-black/60 backdrop-blur-md p-4 rounded-3xl border border-white/10 shadow-2xl">
                         <p className="text-white text-lg font-medium leading-relaxed tracking-wide animate-pulse">
                             "{subtitle}"
                         </p>
-                     </div>
+                    </div>
                 </div>
             )}
         </div>
