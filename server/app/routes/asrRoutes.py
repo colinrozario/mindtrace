@@ -307,10 +307,11 @@ async def websocket_asr(
     audio_buffer = []
     chunk_counter = 0
     total_chunks_received = 0
-    TRANSCRIBE_INTERVAL_CHUNKS = 2 # Approx 0.5 second (Even faster updates)
-    RMS_THRESHOLD = 0.0005 # Further reduced threshold for better sensitivity
+    TRANSCRIBE_INTERVAL_CHUNKS = 3 # Optimized for balance between speed and accuracy
+    RMS_THRESHOLD = 0.0003 # Highly sensitive for better voice detection
     last_activity_time = asyncio.get_event_loop().time()
-    IDLE_TIMEOUT = 30.0 # Keep connection alive for 30 seconds of silence
+    IDLE_TIMEOUT = 45.0 # Extended timeout for better user experience
+    last_transcript = ""  # Track last transcript to avoid duplicates
 
     if not asr_engine:
         print("❌ Error: ASR Engine is not initialized")
@@ -362,53 +363,38 @@ async def websocket_asr(
                 continue
             
             # --- Incremental Transcription for Subtitles ---
-            # Use smaller interval for lower latency
+            # Optimized for smoother, faster transcription
             if chunk_counter >= TRANSCRIBE_INTERVAL_CHUNKS and asr_engine:
                 chunk_counter = 0
                 try:
-                    # Rolling buffer strategy:
-                    # Ideally we keep a single large buffer or a deque of chunks.
-                    # Repeated np.concatenate is O(N^2) if done naively on growing list.
-                    # Here we flatten only the window we need + context.
-
-                    # Max context: ~15 seconds (240k samples)
-                    # Transcribe window: Last 3 seconds for quick feedback (approx 48k samples)
-                    # But we provide more context to Whisper if available.
-                    
-                    # Optimization: Only flatten if we have new chunks
-                    # (Here we always have at least 1 new chunk due to if check)
-
-                    # Quick concatenate just for the recent window optimization
-                    # We need enough past context for accurate transcription, but we only really care about the new text.
-                    # Let's take the last N chunks that sum up to ~5-10 seconds.
-                    
-                    # Minimal implementation for speed:
-                    # 1. Concatenate everything (still simple enough for < 1 min audio)
-                    # 2. Slice the last 5 seconds.
-                    
+                    # Efficient buffer management with rolling window
                     current_full = np.concatenate(audio_buffer)
                     
-                    # Limit buffer growth - Keep last 30 seconds max to prevent OOM on very long sessions
-                    # 16000 * 30 = 480,000
-                    if len(current_full) > 480000:
-                         # Keep last 15s only
-                         current_full = current_full[-240000:]
+                    # Limit buffer growth - Keep last 20 seconds max to prevent OOM
+                    # 16000 * 20 = 320,000 samples
+                    MAX_BUFFER_SAMPLES = 320000
+                    if len(current_full) > MAX_BUFFER_SAMPLES:
+                         # Keep last 12 seconds only
+                         current_full = current_full[-192000:]
                          # Reset buffer to single chunk to free memory
                          audio_buffer = [current_full]
 
-                    # Transcribe window: Last 5 seconds (80000 samples)
-                    # Reduced from previous logic to ensure responsiveness
-                    SAMPLES_FOR_TRANSCRIPTION = 80000 
-                    transcribe_window = current_full[-SAMPLES_FOR_TRANSCRIPTION:] if len(current_full) > SAMPLES_FOR_TRANSCRIPTION else current_full
+                    # Adaptive transcription window based on buffer size
+                    # Use 4-6 seconds for optimal balance between speed and accuracy
+                    SAMPLES_FOR_TRANSCRIPTION = min(96000, len(current_full))  # 6 seconds max
+                    transcribe_window = current_full[-SAMPLES_FOR_TRANSCRIPTION:]
                     
-                    # VAD: Check Energy Level (RMS)
+                    # Enhanced VAD: Check Energy Level (RMS) with better sensitivity
                     rms = np.sqrt(np.mean(transcribe_window**2))
                     
-                    # Reduced valid length check for faster first token
-                    if len(transcribe_window) > 1600 and rms > RMS_THRESHOLD: # > 0.1s
+                    # More aggressive speech detection
+                    if len(transcribe_window) > 8000 and rms > RMS_THRESHOLD:  # > 0.5s minimum
                         # Run ASR on threadpool to avoid blocking WebSocket
                         transcript = await asyncio.to_thread(asr_engine.transcribe_audio_chunk, transcribe_window)
-                        if transcript and transcript.strip():
+                        
+                        # Only send if transcript changed or is new
+                        if transcript and transcript.strip() and transcript != last_transcript:
+                            last_transcript = transcript
                             print(f"✓ Subtitle: {transcript}")
                             await websocket.send_json({
                                 "type": "subtitle",
@@ -416,14 +402,16 @@ async def websocket_asr(
                             })
                     else:
                         # Send empty subtitle to clear if too quiet
-                        if rms <= RMS_THRESHOLD:
+                        if rms <= RMS_THRESHOLD and last_transcript:
+                            last_transcript = ""
                             await websocket.send_json({
                                 "type": "subtitle",
                                 "text": ""
                             })
                 except Exception as e:
                     print(f"Incremental transcribe error: {e}")
-            # -----------------------------------------------
+                    import traceback
+                    traceback.print_exc()
             # -----------------------------------------------
 
     except WebSocketDisconnect:

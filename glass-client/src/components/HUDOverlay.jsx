@@ -9,20 +9,24 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
         return () => clearInterval(timer);
     }, []);
 
-    // Helper to get style for tracking tag
-    const getTagStyle = (position, index) => {
+    // Helper to get style for tracking tag with smart positioning for multiple faces
+    const getTagStyle = (position, index, totalFaces) => {
         if (!position) return {};
 
-        const { left, top, width, height } = position;
+        const { left, top, width } = position;
 
-        // Add vertical offset for multiple faces to prevent overlap
-        const verticalOffset = index * 20; // Stagger tags vertically
+        // Smart positioning for multiple faces
+        // Alternate sides and stagger vertically to prevent overlap
+        const isRightSide = index % 2 === 0;
+        const verticalOffset = Math.floor(index / 2) * 30; // Stagger every other face
+        
+        const horizontalOffset = isRightSide ? width + 40 : -260; // Tag width ~240px + margin
 
         return {
             position: 'absolute',
-            left: `${left + width + 40}px`, // Increased offset for larger tag
+            left: `${left + horizontalOffset}px`,
             top: `${top + verticalOffset}px`,
-            transition: 'all 0.15s ease-out', // Smoother transition to reduce jitter
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', // Smooth easing
             zIndex: 1000 + index // Ensure proper stacking
         };
     };
@@ -87,7 +91,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                 {/* Tracking Tags */}
                 {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.map((result, index) => (
                     result.position && (
-                        <div key={`tag-${result.name}-${result.confidence}-${index}`} style={getTagStyle(result.position, index)}>
+                        <div key={`tag-${result.name}-${result.confidence}-${index}`} style={getTagStyle(result.position, index, recognitionResult.length)}>
                             <TagContent result={result} />
                         </div>
                     )
@@ -167,7 +171,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
             {/* Tracking Tags - Minimal for Ray-Ban */}
             {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.map((result, index) => (
                 result.position && (
-                    <div key={`tag-${result.name}-${result.confidence}-${index}`} style={getTagStyle(result.position, index)}>
+                    <div key={`tag-${result.name}-${result.confidence}-${index}`} style={getTagStyle(result.position, index, recognitionResult.length)}>
                         <div className="bg-white/10 backdrop-blur-xl p-4 rounded-2xl border border-white/20 text-white shadow-2xl">
                             <div className="text-2xl font-bold">{result.name}</div>
                             <div className="text-base font-medium opacity-80">{result.relation}</div>

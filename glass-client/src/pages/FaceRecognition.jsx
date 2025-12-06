@@ -83,7 +83,8 @@ const FaceRecognition = () => {
     const isProcessingRef = useRef(false);
     const loopActiveRef = useRef(false);
     const lastRequestTimeRef = useRef(0);
-    const MIN_REQUEST_INTERVAL = 150; // Minimum 150ms between requests (~6-7 FPS for faster detection)
+    const MIN_REQUEST_INTERVAL = 120; // Optimized to ~8 FPS for smoother multi-face detection
+    const faceTrackingCache = useRef(new Map()); // Cache for smoother face tracking
 
     const captureFrame = () => {
         if (videoRef.current && canvasRef.current) {
@@ -93,8 +94,8 @@ const FaceRecognition = () => {
 
             if (video.videoWidth === 0 || video.videoHeight === 0) return null;
 
-            // Resize to max 480px width for faster processing (reduced from 640px)
-            const MAX_WIDTH = 480;
+            // Optimized resolution for multi-face detection (512px matches backend)
+            const MAX_WIDTH = 512;
             let width = video.videoWidth;
             let height = video.videoHeight;
 
@@ -110,7 +111,7 @@ const FaceRecognition = () => {
             return new Promise(resolve => {
                 canvas.toBlob(blob => {
                     resolve(blob);
-                }, 'image/jpeg', 0.7); // Slightly lower quality for faster upload
+                }, 'image/jpeg', 0.75); // Balanced quality for better face detection
             });
         }
         return null;
@@ -123,8 +124,8 @@ const FaceRecognition = () => {
         const videoWidth = video.videoWidth;
         const videoHeight = video.videoHeight;
         
-        // Match the MAX_WIDTH used in captureFrame (now 480)
-        const MAX_WIDTH = 480;
+        // Match the MAX_WIDTH used in captureFrame (now 512)
+        const MAX_WIDTH = 512;
         let sentWidth = videoWidth;
         let sentHeight = videoHeight;
         if (videoWidth > MAX_WIDTH) {
@@ -445,20 +446,46 @@ const FaceRecognition = () => {
             console.log("Processed results:", processedResults);
 
             if (processedResults.length > 0) {
-                setRecognitionResult(processedResults);
-                lastResultRef.current = processedResults;
+                // Smooth face tracking with cache
+                const smoothedResults = processedResults.map(result => {
+                    const cacheKey = result.name + (result.contact_id || '');
+                    const cached = faceTrackingCache.current.get(cacheKey);
+                    
+                    if (cached && result.position) {
+                        // Smooth position transitions
+                        const smoothFactor = 0.3; // Lower = smoother but more lag
+                        result.position = {
+                            left: cached.left * (1 - smoothFactor) + result.position.left * smoothFactor,
+                            top: cached.top * (1 - smoothFactor) + result.position.top * smoothFactor,
+                            width: cached.width * (1 - smoothFactor) + result.position.width * smoothFactor,
+                            height: cached.height * (1 - smoothFactor) + result.position.height * smoothFactor
+                        };
+                    }
+                    
+                    if (result.position) {
+                        faceTrackingCache.current.set(cacheKey, result.position);
+                    }
+                    
+                    return result;
+                });
+                
+                setRecognitionResult(smoothedResults);
+                lastResultRef.current = smoothedResults;
                 
                 // Update debug status with face info
-                const faceNames = processedResults.map(r => r.name).join(", ");
-                setDebugStatus(`Detected: ${faceNames}`);
+                const faceCount = smoothedResults.length;
+                const faceNames = smoothedResults.slice(0, 3).map(r => r.name).join(", ");
+                const moreText = faceCount > 3 ? ` +${faceCount - 3}` : '';
+                setDebugStatus(`${faceCount} face${faceCount > 1 ? 's' : ''}: ${faceNames}${moreText}`);
                 
                 // --- ASR Trigger ---
                 // If we detect a face, start recording if not already
-                // Use the name of the first person detected as ID
-                const name = processedResults[0]?.name || "Unknown";
-                const currentUserId = userIdRef.current; // Use ref to get current value
+                // Use the name of the first identified person (not Unknown) or first person
+                const identifiedPerson = smoothedResults.find(r => r.name !== "Unknown");
+                const name = identifiedPerson?.name || smoothedResults[0]?.name || "Unknown";
+                const currentUserId = userIdRef.current;
                 
-                if (!isRecordingRef.current && currentUserId) {
+                if (!isRecordingRef.current && currentUserId && name !== "Unknown") {
                     console.log(`Face detected: ${name}, starting ASR...`);
                     startRecording(name);
                 } else if (!currentUserId) {
@@ -473,17 +500,18 @@ const FaceRecognition = () => {
             } else {
                 setRecognitionResult([]);
                  if (lastResultRef.current && !timeoutRef.current) {
-                    // Increased timeout to 2 seconds to reduce flicker
+                    // Extended timeout to 2.5 seconds for smoother experience
                     timeoutRef.current = setTimeout(() => {
                         lastResultRef.current = null;
                         timeoutRef.current = null;
+                        faceTrackingCache.current.clear(); // Clear cache when no faces
                         setDebugStatus("No Faces");
                         
                         // --- ASR Stop ---
                         stopRecording();
                         // ----------------
                         
-                    }, 2000);
+                    }, 2500);
                     setDebugStatus("Persisting...");
                 } else if (!lastResultRef || !lastResultRef.current) {
                      setDebugStatus("Scanning...");
