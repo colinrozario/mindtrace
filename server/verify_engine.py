@@ -2,7 +2,7 @@ import sys
 import os
 import cv2
 
-# Add current directory to path so we can import ai_engine
+
 sys.path.append(os.getcwd())
 
 from ai_engine.face_engine import load_models, register_profile, recognize_face
@@ -16,7 +16,7 @@ def main():
     dad_img_path = "ai_engine/profiles/images/dad.png"
     print(f"Registering Dad from {dad_img_path}...")
     if register_profile(app, "Michael", "Father", dad_img_path):
-        print("Dad registered successfully.")
+        print("Dad was registered successfully.")
     else:
         print("Failed to register Dad.")
 
@@ -24,7 +24,7 @@ def main():
     mom_img_path = "ai_engine/profiles/images/mom.png"
     print(f"Registering Mom from {mom_img_path}...")
     if register_profile(app, "Sarah", "Mother", mom_img_path):
-        print("Mom registered successfully.")
+        print("Mom was registered successfully.")
     else:
         print("Failed to register Mom.")
 
