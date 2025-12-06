@@ -348,48 +348,63 @@ async def websocket_asr(
                 continue
             
             # --- Incremental Transcription for Subtitles ---
-            if chunk_counter >= TRANSCRIBE_INTERVAL_CHUNKS and asr_engine:
+            # Use smaller interval for lower latency
+            if chunk_counter >= 1 and asr_engine:
                 chunk_counter = 0
                 try:
-                    # Prevent infinite buffer growth - Keep last 15 seconds max
-                    # 16000 Hz * 15s = 240,000 samples
-                    MAX_BUFFER_SAMPLES = 240000
+                    # Rolling buffer strategy:
+                    # Ideally we keep a single large buffer or a deque of chunks.
+                    # Repeated np.concatenate is O(N^2) if done naively on growing list.
+                    # Here we flatten only the window we need + context.
+
+                    # Max context: ~15 seconds (240k samples)
+                    # Transcribe window: Last 3 seconds for quick feedback (approx 48k samples)
+                    # But we provide more context to Whisper if available.
                     
-                    # Flatten current buffer
+                    # Optimization: Only flatten if we have new chunks
+                    # (Here we always have at least 1 new chunk due to if check)
+
+                    # Quick concatenate just for the recent window optimization
+                    # We need enough past context for accurate transcription, but we only really care about the new text.
+                    # Let's take the last N chunks that sum up to ~5-10 seconds.
+                    
+                    # Minimal implementation for speed:
+                    # 1. Concatenate everything (still simple enough for < 1 min audio)
+                    # 2. Slice the last 5 seconds.
+                    
                     current_full = np.concatenate(audio_buffer)
                     
-                    # If buffer exceeds max size, trim from the beginning
-                    if len(current_full) > MAX_BUFFER_SAMPLES:
-                        current_full = current_full[-MAX_BUFFER_SAMPLES:]
-                        audio_buffer = [current_full]
+                    # Limit buffer growth - Keep last 30 seconds max to prevent OOM on very long sessions
+                    # 16000 * 30 = 480,000
+                    if len(current_full) > 480000:
+                         # Keep last 15s only
+                         current_full = current_full[-240000:]
+                         # Reset buffer to single chunk to free memory
+                         audio_buffer = [current_full]
 
                     # Transcribe window: Last 5 seconds (80000 samples)
+                    # Reduced from previous logic to ensure responsiveness
                     SAMPLES_FOR_TRANSCRIPTION = 80000 
                     transcribe_window = current_full[-SAMPLES_FOR_TRANSCRIPTION:] if len(current_full) > SAMPLES_FOR_TRANSCRIPTION else current_full
                     
                     # VAD: Check Energy Level (RMS)
                     rms = np.sqrt(np.mean(transcribe_window**2))
                     
-                    if len(transcribe_window) > 4800 and rms > RMS_THRESHOLD:
-                        print(f"Transcribing {len(transcribe_window)} samples (RMS: {rms:.5f})...")
+                    # Reduced valid length check for faster first token
+                    if len(transcribe_window) > 3200 and rms > RMS_THRESHOLD: # > 0.2s
+                        # print(f"Transcribing {len(transcribe_window)} samples...")
                         transcript = asr_engine.transcribe_audio_chunk(transcribe_window)
                         if transcript:
-                            print(f"✓ Partial Transcript: {transcript}")
+                            print(f"✓ {transcript}")
                             await websocket.send_json({
                                 "type": "subtitle",
                                 "text": transcript
                             })
-                        else:
-                            print("Empty transcript returned")
                     else:
-                        if len(transcribe_window) <= 4800:
-                            print(f"Buffer too small: {len(transcribe_window)} samples")
-                        else:
-                            print(f"Audio too quiet: RMS {rms:.5f} < {RMS_THRESHOLD}")
+                        pass # Too quiet or too short
                 except Exception as e:
                     print(f"Incremental transcribe error: {e}")
-                    import traceback
-                    traceback.print_exc()
+            # -----------------------------------------------
             # -----------------------------------------------
 
     except WebSocketDisconnect:
