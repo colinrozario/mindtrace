@@ -245,12 +245,33 @@ const AiSummarizer = () => {
                     <div className="mt-4 pt-4 border-t border-gray-300">
                       <p className="text-xs font-medium mb-2 opacity-75">Sources:</p>
                       <div className="space-y-1">
-                        {message.sources.map((source, idx) => (
-                          <div key={idx} className="text-xs opacity-75">
-                            • {source.contact_name} ({new Date(source.timestamp).toLocaleDateString()})
-                            {source.relevance_score && ` - ${Math.round(source.relevance_score * 100)}% relevant`}
-                          </div>
-                        ))}
+                        {message.sources.map((source, idx) => {
+                          // Format timestamp to IST
+                          let formattedDate = 'Unknown date';
+                          if (source.timestamp) {
+                            try {
+                              const date = new Date(source.timestamp);
+                              formattedDate = date.toLocaleString('en-IN', {
+                                timeZone: 'Asia/Kolkata',
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true
+                              }) + ' IST';
+                            } catch (e) {
+                              formattedDate = source.timestamp;
+                            }
+                          }
+                          
+                          return (
+                            <div key={idx} className="text-xs opacity-75">
+                              • {source.contact_name} ({formattedDate})
+                              {source.relevance_score && ` - ${Math.round(source.relevance_score * 100)}% relevant`}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

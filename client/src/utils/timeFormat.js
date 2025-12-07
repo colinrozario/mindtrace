@@ -22,3 +22,37 @@ export const formatTime12Hour = (time24) => {
   
   return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
 };
+
+/**
+ * Format a timestamp to IST (Indian Standard Time) in a readable format
+ * @param {string|Date} timestamp - ISO timestamp or Date object
+ * @returns {string} Formatted date/time in IST (e.g., "7 December 2025, 2:30 PM IST")
+ */
+export const formatToIST = (timestamp) => {
+  if (!timestamp) return 'Never';
+  
+  try {
+    const date = new Date(timestamp);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return timestamp.toString();
+    }
+    
+    // Format to IST
+    const formatted = date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    
+    return `${formatted} IST`;
+  } catch (error) {
+    console.error('Error formatting date to IST:', error);
+    return timestamp.toString();
+  }
+};
