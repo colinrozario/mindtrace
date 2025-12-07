@@ -4,25 +4,13 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ContactAvatar from './ContactAvatar';
 import { contactsApi } from '../services/api';
 import toast from 'react-hot-toast';
+import { formatToIST } from '../utils/timeFormat';
 
 const ContactDetailModal = ({ contact, onClose, onEdit }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const formatLastSeen = (timestamp) => {
     if (!timestamp) return 'Never';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffHours < 1) {
-      return 'Just now';
-    } else if (diffHours < 24) {
-      return `${diffHours}h ago`;
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else {
-      return `${diffDays}d ago`;
+    return formatToIST(timestamp);
     }
   };
 

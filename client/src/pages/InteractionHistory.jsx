@@ -3,6 +3,7 @@ import { Search, Download, X, MapPin, Clock, Star, RefreshCw } from 'lucide-reac
 import { interactionsApi, asrApi, userApi } from '../services/api';
 import toast from 'react-hot-toast';
 import ContactAvatar from '../components/ContactAvatar';
+import { formatRelativeTime, formatToIST } from '../utils/timeFormat';
 
 const InteractionHistory = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -109,23 +110,7 @@ const InteractionHistory = () => {
 
 
 
-  const formatTimestamp = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffHours < 24) {
-      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
-    } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-  };
 
   const handleExport = () => {
     alert('Export functionality would download interaction history as PDF/CSV');
@@ -302,7 +287,7 @@ const InteractionHistory = () => {
                   <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
                     <div className="flex items-center gap-1">
                       <Clock className="h-4 w-4" />
-                      {formatTimestamp(interaction.timestamp)}
+                      {formatRelativeTime(interaction.timestamp)}
                     </div>
                     {interaction.duration && <div>Duration: {interaction.duration}</div>}
                     {interaction.location && (
@@ -364,7 +349,7 @@ const InteractionHistory = () => {
                 <div className="bg-gray-50 rounded-xl p-4">
                   <p className="text-xs text-gray-500 mb-1">Date & Time</p>
                   <p className="font-semibold text-gray-900">
-                    {new Date(selectedInteraction.timestamp).toLocaleString()}
+                    {formatToIST(selectedInteraction.timestamp)}
                   </p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-4">

@@ -6,6 +6,7 @@ import EditContactModal from '../components/EditContactModal';
 import ContactAvatar from '../components/ContactAvatar';
 import { contactsApi, faceApi } from '../services/api';
 import toast from 'react-hot-toast';
+import { formatRelativeTime } from '../utils/timeFormat';
 
 const ContactsDirectory = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,20 +85,7 @@ const ContactsDirectory = () => {
 
   const formatLastSeen = (timestamp) => {
     if (!timestamp) return 'Never';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffHours < 1) {
-      return 'Just now';
-    } else if (diffHours < 24) {
-      return `${diffHours}h ago`;
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else {
-      return `${diffDays}d ago`;
+    return formatRelativeTime(timestamp).replace(' ago', '').replace('minutes', 'min').replace('minute', 'min').replace('hours', 'h').replace('hour', 'h').replace('days', 'd').replace('day', 'd');
     }
   };
 

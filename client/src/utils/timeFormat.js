@@ -56,3 +56,55 @@ export const formatToIST = (timestamp) => {
     return timestamp.toString();
   }
 };
+
+/**
+ * Format a timestamp as relative time (e.g., "2 hours ago", "3 days ago")
+ * Properly handles timezone conversion to IST before calculating differences
+ * @param {string|Date} timestamp - ISO timestamp or Date object
+ * @returns {string} Relative time string
+ */
+export const formatRelativeTime = (timestamp) => {
+  if (!timestamp) return 'Never';
+  
+  try {
+    const date = new Date(timestamp);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return timestamp.toString();
+    }
+    
+    // Get current time
+    const now = new Date();
+    
+    // Calculate difference in milliseconds
+    const diffMs = now - date;
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Return appropriate format
+    if (diffMinutes < 1) {
+      return 'Just now';
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else {
+      // For older dates, show the actual date in IST
+      return date.toLocaleDateString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+    }
+  } catch (error) {
+    console.error('Error formatting relative time:', error);
+    return timestamp.toString();
+  }
+};

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Bell, AlertCircle, Info, AlertTriangle, X, Filter, Trash2, Loader2 } from 'lucide-react';
 import { alertsApi } from '../services/api';
 import toast from 'react-hot-toast';
+import { formatRelativeTime, formatToIST } from '../utils/timeFormat';
 
 const AlertsNotifications = () => {
   const [selectedSeverity, setSelectedSeverity] = useState('all');
@@ -263,21 +264,7 @@ const AlertsNotifications = () => {
     return configs[severity] || configs.info;
   };
 
-  const formatTimestamp = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
 
-    if (diffHours < 1) {
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
-    } else if (diffHours < 24) {
-      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-    } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    }
-  };
 
   return (
     <div className="p-6 lg:p-8 max-w-[1600px] mx-auto">
@@ -392,7 +379,7 @@ const AlertsNotifications = () => {
                       )}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500">{formatTimestamp(alert.timestamp)}</p>
+                  <p className="text-xs text-gray-500">{formatRelativeTime(alert.timestamp)}</p>
                 </div>
               </div>
             </div>
@@ -427,14 +414,7 @@ const AlertsNotifications = () => {
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Time</span>
                   <span className="font-medium text-gray-900">
-                    {new Date(selectedAlert.timestamp).toLocaleString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                      hour12: true
-                    })}
+                    {formatToIST(selectedAlert.timestamp)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">

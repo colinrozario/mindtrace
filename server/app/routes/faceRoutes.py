@@ -62,8 +62,8 @@ async def recognize_face_endpoint(
                         Contact.id == res["contact_id"]
                     ).first()
                     if contact:
-                        from datetime import datetime
-                        contact.last_seen = datetime.now()
+                        from datetime import datetime, timezone
+                        contact.last_seen = datetime.now(timezone.utc)
             db.commit()
         
         return JSONResponse(content=result, status_code=200)

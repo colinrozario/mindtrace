@@ -6,7 +6,7 @@ import AddReminderModal from '../components/AddReminderModal';
 import ContactAvatar from '../components/ContactAvatar';
 import { interactionsApi, remindersApi, userApi, statsApi } from '../services/api';
 import toast from 'react-hot-toast';
-import { formatTime12Hour } from '../utils/timeFormat';
+import { formatTime12Hour, formatRelativeTime } from '../utils/timeFormat';
 
 const DashboardHome = () => {
   const navigate = useNavigate();
@@ -60,19 +60,7 @@ const DashboardHome = () => {
     fetchData();
   }, []);
 
-  const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
 
-    if (diffHours < 24) {
-      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-    } else {
-      return date.toLocaleDateString();
-    }
-  };
 
   const launchGlassesView = () => {
     const token = localStorage.getItem('token');
@@ -252,7 +240,7 @@ const DashboardHome = () => {
                           <p className="text-sm text-gray-500">{interaction.contact_relationship || 'Contact'}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-500">{formatTime(interaction.timestamp)}</span>
+                          <span className="text-sm text-gray-500">{formatRelativeTime(interaction.timestamp)}</span>
                         </div>
                       </div>
                       <p className="text-sm text-gray-600 line-clamp-2">{interaction.summary}</p>
