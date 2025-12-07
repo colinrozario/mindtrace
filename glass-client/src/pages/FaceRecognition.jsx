@@ -83,8 +83,10 @@ const FaceRecognition = () => {
     const isProcessingRef = useRef(false);
     const loopActiveRef = useRef(false);
     const lastRequestTimeRef = useRef(0);
-    const MIN_REQUEST_INTERVAL = 120; // Optimized to ~8 FPS for smoother multi-face detection
+    const MIN_REQUEST_INTERVAL = 50; // Increased to ~20 FPS for ultra-smooth tracking
     const faceTrackingCache = useRef(new Map()); // Cache for smoother face tracking
+    const velocityCache = useRef(new Map()); // Track velocity for predictive smoothing
+    const frameInterpolationRef = useRef(null); // For frame interpolation between API calls
 
     const captureFrame = () => {
         if (videoRef.current && canvasRef.current) {
@@ -94,12 +96,12 @@ const FaceRecognition = () => {
 
             if (video.videoWidth === 0 || video.videoHeight === 0) return null;
 
-            // Use 640px to match backend det_size for better detection
-            const MAX_DIM = 640;
+            // Use 384px to match backend det_size for maximum performance
+            const MAX_DIM = 384;
             let width = video.videoWidth;
             let height = video.videoHeight;
 
-            // Scale to fit within 640x640 while maintaining aspect ratio
+            // Scale to fit within 384x384 while maintaining aspect ratio
             const scale = Math.min(MAX_DIM / width, MAX_DIM / height);
             width = Math.round(width * scale);
             height = Math.round(height * scale);
@@ -107,16 +109,15 @@ const FaceRecognition = () => {
             canvas.width = width;
             canvas.height = height;
             
-            // Enable image smoothing for better quality
-            context.imageSmoothingEnabled = true;
-            context.imageSmoothingQuality = 'high';
+            // Disable smoothing for faster processing
+            context.imageSmoothingEnabled = false;
             
             context.drawImage(video, 0, 0, width, height);
 
             return new Promise(resolve => {
                 canvas.toBlob(blob => {
                     resolve(blob);
-                }, 'image/jpeg', 0.85); // Higher quality for better face detection
+                }, 'image/jpeg', 0.75); // Lower quality for maximum speed
             });
         }
         return null;
@@ -129,8 +130,8 @@ const FaceRecognition = () => {
         const videoWidth = video.videoWidth;
         const videoHeight = video.videoHeight;
         
-        // Match the MAX_DIM used in captureFrame (now 640)
-        const MAX_DIM = 640;
+        // Match the MAX_DIM used in captureFrame (now 384)
+        const MAX_DIM = 384;
         const scale = Math.min(MAX_DIM / videoWidth, MAX_DIM / videoHeight);
         let sentWidth = Math.round(videoWidth * scale);
         let sentHeight = Math.round(videoHeight * scale);
@@ -440,12 +441,8 @@ const FaceRecognition = () => {
             const response = await faceApi.recognize(formData);
             const data = response.data;
 
-            console.log("Face recognition response:", data);
-
             const results = Array.isArray(data) ? data : [data];
             const validResults = results.filter(r => r);
-
-            console.log("Valid results:", validResults);
 
             const processedResults = validResults.map((result) => {
                 if (result.bbox) {
@@ -454,22 +451,42 @@ const FaceRecognition = () => {
                 return result;
             });
 
-            console.log("Processed results:", processedResults);
-
             if (processedResults.length > 0) {
-                // Smooth face tracking with cache
+                // Ultra-smooth tracking with aggressive interpolation
                 const smoothedResults = processedResults.map(result => {
                     const cacheKey = result.name + (result.contact_id || '');
                     const cached = faceTrackingCache.current.get(cacheKey);
+                    const velocity = velocityCache.current.get(cacheKey);
                     
                     if (cached && result.position) {
-                        // Smooth position transitions
-                        const smoothFactor = 0.3; // Lower = smoother but more lag
+                        // Calculate velocity for predictive smoothing
+                        const newVelocity = {
+                            left: result.position.left - cached.left,
+                            top: result.position.top - cached.top,
+                            width: result.position.width - cached.width,
+                            height: result.position.height - cached.height
+                        };
+                        
+                        // Aggressive velocity smoothing for ultra-smooth motion
+                        const velocitySmooth = 0.7;
+                        const smoothedVelocity = velocity ? {
+                            left: velocity.left * (1 - velocitySmooth) + newVelocity.left * velocitySmooth,
+                            top: velocity.top * (1 - velocitySmooth) + newVelocity.top * velocitySmooth,
+                            width: velocity.width * (1 - velocitySmooth) + newVelocity.width * velocitySmooth,
+                            height: velocity.height * (1 - velocitySmooth) + newVelocity.height * velocitySmooth
+                        } : newVelocity;
+                        
+                        velocityCache.current.set(cacheKey, smoothedVelocity);
+                        
+                        // More aggressive smoothing for buttery motion
+                        const smoothFactor = 0.6; // Higher = more responsive
+                        const predictFactor = 0.4; // Higher prediction for smoother tracking
+                        
                         result.position = {
-                            left: cached.left * (1 - smoothFactor) + result.position.left * smoothFactor,
-                            top: cached.top * (1 - smoothFactor) + result.position.top * smoothFactor,
-                            width: cached.width * (1 - smoothFactor) + result.position.width * smoothFactor,
-                            height: cached.height * (1 - smoothFactor) + result.position.height * smoothFactor
+                            left: cached.left * (1 - smoothFactor) + result.position.left * smoothFactor + smoothedVelocity.left * predictFactor,
+                            top: cached.top * (1 - smoothFactor) + result.position.top * smoothFactor + smoothedVelocity.top * predictFactor,
+                            width: cached.width * (1 - smoothFactor) + result.position.width * smoothFactor + smoothedVelocity.width * predictFactor,
+                            height: cached.height * (1 - smoothFactor) + result.position.height * smoothFactor + smoothedVelocity.height * predictFactor
                         };
                     }
                     
@@ -511,18 +528,19 @@ const FaceRecognition = () => {
             } else {
                 setRecognitionResult([]);
                  if (lastResultRef.current && !timeoutRef.current) {
-                    // Extended timeout to 2.5 seconds for smoother experience
+                    // Extended timeout to 2 seconds for smoother experience
                     timeoutRef.current = setTimeout(() => {
                         lastResultRef.current = null;
                         timeoutRef.current = null;
                         faceTrackingCache.current.clear(); // Clear cache when no faces
+                        velocityCache.current.clear(); // Clear velocity cache
                         setDebugStatus("No Faces");
                         
                         // --- ASR Stop ---
                         stopRecording();
                         // ----------------
                         
-                    }, 2500);
+                    }, 2000);
                     setDebugStatus("Persisting...");
                 } else if (!lastResultRef || !lastResultRef.current) {
                      setDebugStatus("Scanning...");
@@ -540,8 +558,8 @@ const FaceRecognition = () => {
             
             setDebugStatus(`Err: ${err.message}`);
             
-            // Shorter backoff on errors (500ms instead of 1000ms)
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Minimal backoff on errors for faster recovery
+            await new Promise(resolve => setTimeout(resolve, 200));
         } finally {
             isProcessingRef.current = false;
             if (loopActiveRef.current) {
@@ -550,11 +568,43 @@ const FaceRecognition = () => {
         }
     };
 
+    // Frame interpolation for ultra-smooth rendering between API calls
+    const interpolateFrames = () => {
+        if (!recognitionResult || !Array.isArray(recognitionResult) || recognitionResult.length === 0) {
+            return;
+        }
+
+        const interpolatedResults = recognitionResult.map(result => {
+            const cacheKey = result.name + (result.contact_id || '');
+            const velocity = velocityCache.current.get(cacheKey);
+            
+            if (velocity && result.position) {
+                // Apply velocity for smooth interpolation
+                const interpolationFactor = 0.5; // Smooth interpolation
+                return {
+                    ...result,
+                    position: {
+                        left: result.position.left + velocity.left * interpolationFactor,
+                        top: result.position.top + velocity.top * interpolationFactor,
+                        width: result.position.width + velocity.width * interpolationFactor,
+                        height: result.position.height + velocity.height * interpolationFactor
+                    }
+                };
+            }
+            return result;
+        });
+
+        setRecognitionResult(interpolatedResults);
+    };
+
     const startRecognitionLoop = () => {
         if (loopActiveRef.current) return;
         loopActiveRef.current = true;
         setDebugStatus("Loop Started (Flow Control)");
-        processFrame(); 
+        processFrame();
+        
+        // Start frame interpolation at 60 FPS for ultra-smooth display
+        frameInterpolationRef.current = setInterval(interpolateFrames, 16); // ~60 FPS
     };
 
     useEffect(() => {
@@ -562,6 +612,7 @@ const FaceRecognition = () => {
         startRecognitionLoop();
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
+            if (frameInterpolationRef.current) clearInterval(frameInterpolationRef.current);
             if (videoRef.current && videoRef.current.srcObject) {
                 videoRef.current.srcObject.getTracks().forEach(track => track.stop());
             }
