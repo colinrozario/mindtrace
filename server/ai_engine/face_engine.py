@@ -21,17 +21,18 @@ except ImportError:
 def load_models():
     """
     Load the RetinaFace and ArcFace models.
-    Optimized for faster multi-face detection with balanced detection size.
+    Optimized for real-time multi-face detection with maximum performance.
     """
     app = FaceAnalysis(name="buffalo_l")
-    # Use (640, 640) for better detection with various aspect ratios
-    # This handles both portrait and landscape orientations better
-    app.prepare(ctx_id=0, det_size=(640, 640))
+    # Use (384, 384) for maximum speed while maintaining acceptable accuracy
+    # Smaller size = faster processing = smoother tracking
+    app.prepare(ctx_id=0, det_size=(384, 384))
     return app
 
 def detect_and_embed(app, image):
     """
     Detect all faces and return their embedding vectors.
+    Optimized for real-time performance with minimal preprocessing.
     """
     # InsightFace expects BGR image (OpenCV format)
     if image is None:
@@ -45,19 +46,18 @@ def detect_and_embed(app, image):
         
     print(f"DEBUG: Image shape: {image.shape}, dtype: {image.dtype}")
     
-    # Apply histogram equalization for better detection in poor lighting
-    # Convert to LAB color space, equalize L channel, convert back
-    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    l = clahe.apply(l)
-    enhanced = cv2.merge([l, a, b])
-    enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
-    
-    # Try detection on both original and enhanced image
+    # Direct detection for speed - skip enhancement for real-time performance
     faces = app.get(image)
+    
+    # Only try enhancement if no faces detected (fallback)
     if len(faces) == 0:
-        print("DEBUG: No faces in original, trying enhanced image")
+        print("DEBUG: No faces detected, trying enhanced image")
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        l = clahe.apply(l)
+        enhanced = cv2.merge([l, a, b])
+        enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
         faces = app.get(enhanced)
     
     print(f"DEBUG: Detected {len(faces)} faces")
@@ -68,10 +68,13 @@ def detect_and_embed(app, image):
     results = []
     for idx, face in enumerate(faces):
         bbox = face.bbox.tolist()
-        print(f"DEBUG: Face {idx} bbox: {bbox}")
+        # Add detection score for confidence filtering
+        det_score = float(face.det_score) if hasattr(face, 'det_score') else 1.0
+        print(f"DEBUG: Face {idx} bbox: {bbox}, score: {det_score:.3f}")
         results.append({
             "embedding": face.embedding.tolist(),
-            "bbox": bbox
+            "bbox": bbox,
+            "det_score": det_score
         })
     
     print(f"DEBUG: Returning {len(results)} face embeddings")
@@ -88,12 +91,20 @@ def cosine_similarity(a, b):
 def recognize_face(app, image, threshold=0.42, user_id=None):
     """
     Compare input face embeddings to stored embeddings using ChromaDB.
-    Optimized for multi-face detection with improved accuracy.
+    Optimized for real-time multi-face detection with confidence filtering.
     Returns a list of recognition results sorted by confidence.
     """
     # Get embedding and bbox for all faces
     detected_faces = detect_and_embed(app, image)
     print(f"DEBUG: recognize_face - Processing {len(detected_faces)} detected faces")
+    
+    if not detected_faces:
+        return []
+
+    # Filter out low-confidence detections for stability
+    MIN_DET_SCORE = 0.4  # Slightly lower threshold for better detection
+    detected_faces = [f for f in detected_faces if f.get("det_score", 1.0) >= MIN_DET_SCORE]
+    print(f"DEBUG: After filtering: {len(detected_faces)} high-confidence faces")
     
     if not detected_faces:
         return []
@@ -110,6 +121,7 @@ def recognize_face(app, image, threshold=0.42, user_id=None):
     for idx, face_data in enumerate(detected_faces):
         current_emb = face_data["embedding"]
         current_bbox = face_data["bbox"]
+        det_score = face_data.get("det_score", 1.0)
 
         # Query ChromaDB for top 3 matches to improve accuracy
         # Filter by user_id if provided
@@ -123,8 +135,8 @@ def recognize_face(app, image, threshold=0.42, user_id=None):
                 print(f"DEBUG: Collection is empty, marking face {idx} as Unknown")
                 query_result = None
             else:
-                # Query for top 3 matches for better verification
-                n_results = min(3, collection_count)
+                # Query for top 1 match for maximum speed
+                n_results = 1
                 query_result = collection.query(
                     query_embeddings=[current_emb],
                     n_results=n_results,
@@ -158,10 +170,11 @@ def recognize_face(app, image, threshold=0.42, user_id=None):
                 "relation": "Unidentified Person", 
                 "confidence": float(best_score) if best_score > 0 else 0.0,
                 "bbox": current_bbox,
-                "face_index": idx
+                "face_index": idx,
+                "det_score": det_score
             }
             score_display = best_score if best_score > 0 else 0.0
-            print(f"DEBUG: Face {idx} -> Unknown (best score: {score_display:.3f})")
+            print(f"DEBUG: Face {idx} -> Unknown (best score: {score_display:.3f}, det: {det_score:.3f})")
             results.append(result)
         else:
             match_result = {
@@ -169,13 +182,14 @@ def recognize_face(app, image, threshold=0.42, user_id=None):
                 "relation": best_match["relation"],
                 "confidence": float(best_score),
                 "bbox": current_bbox,
-                "face_index": idx
+                "face_index": idx,
+                "det_score": det_score
             }
             # Include contact_id if available
             if "contact_id" in best_match:
                 match_result["contact_id"] = best_match["contact_id"]
             
-            print(f"DEBUG: Face {idx} -> {best_match['name']} (confidence: {best_score:.3f})")
+            print(f"DEBUG: Face {idx} -> {best_match['name']} (confidence: {best_score:.3f}, det: {det_score:.3f})")
             results.append(match_result)
     
     # Sort results by confidence (highest first) for better display

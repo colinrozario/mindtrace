@@ -10,7 +10,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
     }, []);
 
     // Helper to get style for tracking tag with smart positioning for multiple faces
-    const getTagStyle = (position, index, totalFaces) => {
+    const getTagStyle = (position, index) => {
         if (!position) return {};
 
         const { left, top, width } = position;
@@ -26,7 +26,9 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
             position: 'absolute',
             left: `${left + horizontalOffset}px`,
             top: `${top + verticalOffset}px`,
-            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', // Smooth easing
+            transition: 'left 0.05s linear, top 0.05s linear',
+            willChange: 'transform',
+            transform: 'translate3d(0, 0, 0)',
             zIndex: 1000 + index // Ensure proper stacking
         };
     };
@@ -82,7 +84,10 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                                 height: `${result.position.height}px`,
                                 border: '2px solid rgba(99, 102, 241, 0.8)',
                                 boxShadow: '0 0 20px rgba(99, 102, 241, 0.5)',
-                                pointerEvents: 'none'
+                                pointerEvents: 'none',
+                                willChange: 'transform',
+                                transform: 'translate3d(0, 0, 0)',
+                                transition: 'left 0.05s linear, top 0.05s linear, width 0.05s linear, height 0.05s linear'
                             }}
                         />
                     )
@@ -161,7 +166,10 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                             height: `${result.position.height}px`,
                             border: '2px solid rgba(255, 255, 255, 0.5)',
                             boxShadow: '0 0 20px rgba(255, 255, 255, 0.3)',
-                            pointerEvents: 'none'
+                            pointerEvents: 'none',
+                            willChange: 'transform',
+                            transform: 'translate3d(0, 0, 0)',
+                            transition: 'left 0.05s linear, top 0.05s linear, width 0.05s linear, height 0.05s linear'
                         }}
                     />
                 )
