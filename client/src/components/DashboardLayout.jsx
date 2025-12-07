@@ -9,6 +9,9 @@ const DashboardLayout = () => {
   const mainRef = useRef(null);
   const location = useLocation();
 
+  // Check if current page is AI Summarizer
+  const isAiSummarizerPage = location.pathname === '/dashboard/ai-assistant';
+
   // Scroll to top on route change
   useEffect(() => {
     if (mainRef.current) {
@@ -28,8 +31,8 @@ const DashboardLayout = () => {
         </main>
       </div>
 
-      {/* Chatbot Widget */}
-      <Chatbot />
+      {/* Chatbot Widget - Hidden on AI Summarizer page */}
+      {!isAiSummarizerPage && <Chatbot />}
     </div>
   );
 };

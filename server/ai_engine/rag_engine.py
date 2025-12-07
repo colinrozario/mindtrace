@@ -1,33 +1,147 @@
 """
 RAG (Retrieval-Augmented Generation) Engine for Interaction History
-Uses ChromaDB for semantic search and Google Gemini for answer generation
+Uses ChromaDB for semantic search, PostgreSQL for structured data, and Google Gemini for answer generation
 """
 import os
 from typing import List, Dict, Optional
 from google import genai
+from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
 
 class InteractionRAG:
-    def __init__(self, chroma_collection):
+    def __init__(self, chroma_collection, db_session: Optional[Session] = None):
         """
-        Initialize RAG engine with ChromaDB collection
+        Initialize RAG engine with ChromaDB collection and database session
         
         Args:
             chroma_collection: ChromaDB collection for semantic search
+            db_session: SQLAlchemy database session for structured queries
         """
         self.collection = chroma_collection
+        self.db = db_session
         # The client gets the API key from the environment variable `GEMINI_API_KEY`
         self.client = genai.Client()
-        self.model_name = 'gemini-2.0-flash-exp'
+        self.model_name = 'gemini-2.5-flash'
+    
+    def _get_contact_info(self, user_id: int, contact_name: Optional[str] = None) -> List[Dict]:
+        """
+        Retrieve contact information from PostgreSQL
+        
+        Args:
+            user_id: User ID
+            contact_name: Optional contact name to filter by
+        
+        Returns:
+            List of contact dictionaries
+        """
+        if not self.db:
+            return []
+        
+        try:
+            from app.models import Contact
+            
+            query = self.db.query(Contact).filter(
+                Contact.user_id == user_id,
+                Contact.is_active == True
+            )
+            
+            if contact_name:
+                query = query.filter(Contact.name.ilike(f"%{contact_name}%"))
+            
+            contacts = query.all()
+            
+            contact_list = []
+            for contact in contacts:
+                contact_list.append({
+                    "id": contact.id,
+                    "name": contact.name,
+                    "relationship": contact.relationship,
+                    "relationship_detail": contact.relationship_detail,
+                    "phone_number": contact.phone_number,
+                    "email": contact.email,
+                    "notes": contact.notes,
+                    "visit_frequency": contact.visit_frequency,
+                    "last_seen": contact.last_seen.isoformat() if contact.last_seen else None
+                })
+            
+            return contact_list
+        except Exception as e:
+            print(f"Error retrieving contacts: {e}")
+            return []
+    
+    def _get_interaction_stats(self, user_id: int, contact_id: Optional[int] = None) -> Dict:
+        """
+        Get interaction statistics from PostgreSQL
+        
+        Args:
+            user_id: User ID
+            contact_id: Optional contact ID to filter by
+        
+        Returns:
+            Dictionary with interaction statistics
+        """
+        if not self.db:
+            return {}
+        
+        try:
+            from app.models import Interaction
+            from sqlalchemy import func, desc
+            
+            query = self.db.query(Interaction).filter(Interaction.user_id == user_id)
+            
+            if contact_id:
+                query = query.filter(Interaction.contact_id == contact_id)
+            
+            # Total interactions
+            total_count = query.count()
+            
+            # Most recent interaction
+            most_recent = query.order_by(desc(Interaction.timestamp)).first()
+            
+            # Interactions by contact
+            contact_counts = self.db.query(
+                Interaction.contact_name,
+                func.count(Interaction.id).label('count'),
+                func.max(Interaction.timestamp).label('last_interaction')
+            ).filter(
+                Interaction.user_id == user_id
+            ).group_by(
+                Interaction.contact_name
+            ).order_by(
+                desc('count')
+            ).limit(10).all()
+            
+            # Recent interactions (last 7 days)
+            seven_days_ago = datetime.now() - timedelta(days=7)
+            recent_count = query.filter(Interaction.timestamp >= seven_days_ago).count()
+            
+            return {
+                "total_interactions": total_count,
+                "recent_interactions_7d": recent_count,
+                "most_recent_date": most_recent.timestamp.isoformat() if most_recent and most_recent.timestamp else None,
+                "most_recent_contact": most_recent.contact_name if most_recent else None,
+                "top_contacts": [
+                    {
+                        "name": name,
+                        "count": count,
+                        "last_interaction": last_interaction.isoformat() if last_interaction else None
+                    }
+                    for name, count, last_interaction in contact_counts
+                ]
+            }
+        except Exception as e:
+            print(f"Error retrieving interaction stats: {e}")
+            return {}
     
     def query(
         self, 
         question: str, 
         user_id: int,
-        n_results: int = 5,
+        n_results: int = 10,
         include_context: bool = True
     ) -> Dict:
         """
-        Answer a question using RAG over interaction history
+        Answer a question using RAG over interaction history, contacts, and conversation data
         
         Args:
             question: User's question
@@ -39,25 +153,89 @@ class InteractionRAG:
             Dictionary with answer, sources, and metadata
         """
         try:
-            # Step 1: Retrieve relevant interactions from ChromaDB
+            # Step 1: Analyze question to determine what data to retrieve
+            question_lower = question.lower()
+            
+            # Check if question is about contacts
+            is_contact_query = any(word in question_lower for word in [
+                'contact', 'phone', 'email', 'relationship', 'who is', 'tell me about',
+                'how often', 'visit', 'last seen', 'when did i last'
+            ])
+            
+            # Check if question is about statistics/patterns
+            is_stats_query = any(word in question_lower for word in [
+                'how many', 'how often', 'frequency', 'most', 'least', 'statistics',
+                'pattern', 'trend', 'total', 'count'
+            ])
+            
+            # Step 2: Retrieve contact information if relevant
+            contact_context = ""
+            if is_contact_query or is_stats_query:
+                # Try to extract contact name from question
+                # But if asking about groups (family, friends, etc.), get all contacts
+                contact_name = None
+                group_keywords = ['family', 'friends', 'all', 'contacts', 'everyone', 'people']
+                is_group_query = any(keyword in question_lower for keyword in group_keywords)
+                
+                if not is_group_query:
+                    # Only filter by name if not asking about a group
+                    for word in question.split():
+                        if len(word) > 2 and word[0].isupper() and word.lower() not in ['who', 'what', 'when', 'where', 'why', 'how']:
+                            contact_name = word
+                            break
+                
+                contacts = self._get_contact_info(user_id, contact_name)
+                
+                if contacts:
+                    contact_context = "\n\n=== CONTACT INFORMATION ===\n"
+                    contact_context += f"Total contacts found: {len(contacts)}\n"
+                    for contact in contacts:
+                        contact_context += f"\nContact: {contact['name']}\n"
+                        contact_context += f"Relationship: {contact['relationship_detail'] or contact['relationship']}\n"
+                        if contact['phone_number']:
+                            contact_context += f"Phone: {contact['phone_number']}\n"
+                        if contact['email']:
+                            contact_context += f"Email: {contact['email']}\n"
+                        if contact['visit_frequency']:
+                            contact_context += f"Visit Frequency: {contact['visit_frequency']}\n"
+                        if contact['last_seen']:
+                            contact_context += f"Last Seen: {contact['last_seen']}\n"
+                        if contact['notes']:
+                            contact_context += f"Notes: {contact['notes']}\n"
+                else:
+                    contact_context = "\n\n=== CONTACT INFORMATION ===\nNo contacts found in the database.\n"
+            
+            # Step 3: Retrieve interaction statistics if relevant
+            stats_context = ""
+            if is_stats_query:
+                stats = self._get_interaction_stats(user_id)
+                
+                if stats and stats.get('total_interactions', 0) > 0:
+                    stats_context = "\n\n=== INTERACTION STATISTICS ===\n"
+                    stats_context += f"Total Interactions: {stats.get('total_interactions', 0)}\n"
+                    stats_context += f"Recent Interactions (Last 7 Days): {stats.get('recent_interactions_7d', 0)}\n"
+                    
+                    if stats.get('most_recent_contact'):
+                        stats_context += f"Most Recent Interaction: {stats['most_recent_contact']} on {stats.get('most_recent_date', 'Unknown')}\n"
+                    
+                    if stats.get('top_contacts'):
+                        stats_context += "\nTop Contacts by Interaction Count:\n"
+                        for contact in stats['top_contacts'][:5]:
+                            stats_context += f"  - {contact['name']}: {contact['count']} interactions (last: {contact['last_interaction']})\n"
+                else:
+                    stats_context = "\n\n=== INTERACTION STATISTICS ===\nNo interactions found in the database.\n"
+            
+            # Step 4: Retrieve relevant interactions from ChromaDB
             results = self.collection.query(
                 query_texts=[question],
                 n_results=n_results,
                 where={"user_id": user_id}
             )
             
-            if not results or not results['ids'] or not results['ids'][0]:
-                return {
-                    "answer": "I couldn't find any relevant interactions to answer your question. Try asking about specific people, topics, or events from your interaction history.",
-                    "sources": [],
-                    "retrieved_count": 0,
-                    "question": question
-                }
-            
-            # Step 2: Extract and format retrieved interactions
-            documents = results['documents'][0] if results.get('documents') else []
-            metadatas = results['metadatas'][0] if results.get('metadatas') else []
-            distances = results['distances'][0] if results.get('distances') else []
+            # Step 5: Extract and format retrieved interactions
+            documents = results['documents'][0] if results and results.get('documents') and results['documents'][0] else []
+            metadatas = results['metadatas'][0] if results and results.get('metadatas') and results['metadatas'][0] else []
+            distances = results['distances'][0] if results and results.get('distances') and results['distances'][0] else []
             
             sources = []
             context_texts = []
@@ -81,31 +259,56 @@ Content: {doc}
 """
                 context_texts.append(context_text)
             
-            # Step 3: Build prompt for Gemini
-            context_block = "\n".join(context_texts)
+            # Step 6: Build comprehensive prompt for Gemini
+            interaction_context = "\n".join(context_texts) if context_texts else "No relevant interactions found."
             
-            prompt = f"""You are an AI assistant helping a user understand their interaction history. 
-You have access to their past conversations and interactions stored in a database.
+            prompt = f"""You are an AI assistant helping a user understand their interaction history, contacts, and relationships. 
+You have access to:
+1. Their contact database with names, relationships, phone numbers, emails, and notes
+2. Their interaction history with conversations and meetings
+3. Statistics about their communication patterns
 
 The user asked: "{question}"
 
-Here are the most relevant interactions from their history:
+{contact_context}
 
-{context_block}
+{stats_context}
 
-Based on these interactions, please provide a helpful, accurate, and conversational answer to the user's question.
+=== RELEVANT INTERACTIONS ===
+{interaction_context}
+
+CRITICAL INSTRUCTIONS:
+- ONLY use the information provided above in the CONTACT INFORMATION, INTERACTION STATISTICS, and RELEVANT INTERACTIONS sections
+- DO NOT make up, invent, or hallucinate any contact names, phone numbers, emails, or other data
+- If the sections above are empty or say "No relevant interactions found", you MUST tell the user that no data was found
+- If a specific contact is not listed above, you MUST say that contact is not in the database
+- NEVER create example or placeholder data like "555-123-4567" or "example.com" emails
+- If you don't have the information to answer the question, clearly state what information is missing
+
+Based ONLY on the actual data provided above, please provide a helpful, accurate, and conversational answer to the user's question.
 
 Guidelines:
-- Be specific and reference actual interactions when relevant
-- If the interactions don't fully answer the question, say so
+- Use ONLY information from the data sections above - never invent data
+- Be specific and reference actual data when relevant
+- If you have contact information (phone, email), include it when asked
+- If you have statistics, use them to provide insights
 - Use a friendly, conversational tone
-- Cite which interaction(s) you're referencing (e.g., "In your conversation with John...")
-- If you notice patterns or insights, mention them
-- Keep your answer concise but informative
+- Cite which sources you're referencing (e.g., "According to your contact info..." or "In your conversation with John...")
+- If the data doesn't fully answer the question, say so honestly and explain what's missing
+- If there's no data at all, tell the user they need to add contacts or interactions first
+
+FORMATTING INSTRUCTIONS:
+- Write in PLAIN TEXT only - NO markdown formatting
+- Do NOT use asterisks (*), underscores (_), or hashtags (#) for formatting
+- Do NOT use bullet points with dashes (-) or asterisks (*)
+- Instead of bullet points, use numbered lists (1., 2., 3.) or write in paragraph form
+- Do NOT use **bold** or *italic* formatting
+- Use simple line breaks and paragraphs for structure
+- Write naturally as if speaking to someone
 
 Answer:"""
             
-            # Step 4: Generate answer using Gemini
+            # Step 7: Generate answer using Gemini
             response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=prompt
@@ -116,7 +319,9 @@ Answer:"""
                 "answer": answer,
                 "sources": sources if include_context else [],
                 "retrieved_count": len(sources),
-                "question": question
+                "question": question,
+                "used_contacts": bool(contact_context),
+                "used_stats": bool(stats_context)
             }
             
         except Exception as e:
@@ -124,7 +329,7 @@ Answer:"""
             import traceback
             traceback.print_exc()
             return {
-                "answer": f"I encountered an error while searching your interactions: {str(e)}",
+                "answer": f"I encountered an error while searching your data: {str(e)}",
                 "sources": [],
                 "retrieved_count": 0,
                 "question": question,
@@ -176,7 +381,7 @@ Answer:"""
     
     def get_insights(self, user_id: int, topic: Optional[str] = None) -> Dict:
         """
-        Generate insights about interaction patterns
+        Generate insights about interaction patterns using both ChromaDB and PostgreSQL
         
         Args:
             user_id: User ID
@@ -186,45 +391,100 @@ Answer:"""
             Dictionary with insights
         """
         try:
-            # Query for recent interactions
+            # Get comprehensive statistics from PostgreSQL
+            stats = self._get_interaction_stats(user_id)
+            contacts = self._get_contact_info(user_id)
+            
+            # Query for recent interactions from ChromaDB
             query_text = topic if topic else "recent conversations and interactions"
             
             results = self.collection.query(
                 query_texts=[query_text],
-                n_results=20,
+                n_results=30,
                 where={"user_id": user_id}
             )
             
-            if not results or not results['ids'] or not results['ids'][0]:
+            # Prepare data for analysis
+            documents = results['documents'][0] if results and results.get('documents') and results['documents'][0] else []
+            metadatas = results['metadatas'][0] if results and results.get('metadatas') and results['metadatas'][0] else []
+            
+            if not documents and not stats and not contacts:
                 return {
-                    "insights": "Not enough interaction data to generate insights.",
+                    "insights": "Not enough data to generate insights. Start by adding contacts and recording interactions.",
                     "topic": topic
                 }
             
-            # Prepare data for analysis
-            documents = results['documents'][0] if results.get('documents') else []
-            metadatas = results['metadatas'][0] if results.get('metadatas') else []
+            # Build contact context
+            contact_context = ""
+            if contacts:
+                contact_context = "\n\n=== CONTACT DATABASE ===\n"
+                contact_context += f"Total Contacts: {len(contacts)}\n\n"
+                for contact in contacts[:10]:  # Top 10 contacts
+                    contact_context += f"- {contact['name']} ({contact['relationship_detail'] or contact['relationship']})\n"
+                    if contact['visit_frequency']:
+                        contact_context += f"  Visit Frequency: {contact['visit_frequency']}\n"
+                    if contact['last_seen']:
+                        contact_context += f"  Last Seen: {contact['last_seen']}\n"
             
+            # Build stats context
+            stats_context = ""
+            if stats:
+                stats_context = "\n\n=== INTERACTION STATISTICS ===\n"
+                stats_context += f"Total Interactions: {stats.get('total_interactions', 0)}\n"
+                stats_context += f"Recent Interactions (Last 7 Days): {stats.get('recent_interactions_7d', 0)}\n"
+                
+                if stats.get('most_recent_contact'):
+                    stats_context += f"Most Recent: {stats['most_recent_contact']} on {stats.get('most_recent_date', 'Unknown')}\n"
+                
+                if stats.get('top_contacts'):
+                    stats_context += "\nMost Frequent Contacts:\n"
+                    for contact in stats['top_contacts'][:5]:
+                        stats_context += f"  - {contact['name']}: {contact['count']} interactions (last: {contact['last_interaction']})\n"
+            
+            # Build interaction context
             context_texts = []
             for doc, metadata in zip(documents, metadatas):
                 context_texts.append(f"Contact: {metadata.get('contact_name')}, Date: {metadata.get('timestamp')}\n{doc}")
             
-            context_block = "\n\n".join(context_texts)
+            interaction_context = "\n\n".join(context_texts) if context_texts else "No detailed interactions available."
             
             topic_focus = f" focusing on {topic}" if topic else ""
             
-            prompt = f"""Analyze these interactions{topic_focus} and provide insights:
+            prompt = f"""You are analyzing a user's social interactions, contacts, and communication patterns{topic_focus}.
 
-{context_block}
+{contact_context}
 
-Please provide:
-1. Key patterns in communication and relationships
-2. Frequently discussed topics
-3. Relationship dynamics and social network
-4. Temporal patterns (when interactions happen)
-5. Actionable recommendations for the user
+{stats_context}
 
-Be specific and data-driven in your analysis.
+=== RECENT INTERACTIONS ===
+{interaction_context}
+
+Based on ALL the data above (contacts, statistics, and interaction details), please provide comprehensive insights:
+
+1. Relationship Overview: Who are the key people in their life and what roles do they play?
+
+2. Communication Patterns: How often do they interact? Are there any concerning gaps or changes?
+
+3. Social Network Health: Is their social circle diverse? Are they maintaining regular contact?
+
+4. Topics & Interests: What do they talk about most? Any recurring themes?
+
+5. Temporal Patterns: When do interactions typically happen? Any patterns in timing?
+
+6. Recommendations: 
+   - Who should they reach out to (haven't talked to in a while)?
+   - Any relationships that need attention?
+   - Suggestions for maintaining or improving social connections
+
+Be specific, data-driven, and actionable. Reference actual names, dates, and statistics.
+
+FORMATTING INSTRUCTIONS:
+- Write in PLAIN TEXT only - NO markdown formatting
+- Do NOT use asterisks (*), underscores (_), or hashtags (#) for formatting
+- Do NOT use **bold** or *italic* formatting
+- Use numbered lists (1., 2., 3.) for structure
+- Write naturally and conversationally
+- Use simple line breaks and paragraphs
 """
             
             response = self.client.models.generate_content(
@@ -235,11 +495,15 @@ Be specific and data-driven in your analysis.
             return {
                 "insights": response.text,
                 "topic": topic,
-                "analyzed_interactions": len(documents)
+                "analyzed_interactions": len(documents),
+                "total_contacts": len(contacts),
+                "total_interactions": stats.get('total_interactions', 0) if stats else 0
             }
             
         except Exception as e:
             print(f"Error generating insights: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 "insights": f"Error generating insights: {str(e)}",
                 "topic": topic,

@@ -142,11 +142,14 @@ const AiSummarizer = () => {
   };
 
   const suggestedQuestions = [
-    "What did I discuss with John last week?",
+    "What's John's phone number?",
     "Who have I talked to most recently?",
+    "Tell me about my relationship with Sarah",
+    "When was the last time I spoke with my doctor?",
+    "What are all my family contacts?",
+    "How many interactions did I have this week?",
     "What health topics came up in my conversations?",
-    "Summarize my interactions from this month",
-    "What are the main themes in my recent conversations?"
+    "Who should I reach out to that I haven't talked to in a while?"
   ];
 
   return (
@@ -159,7 +162,7 @@ const AiSummarizer = () => {
           </h1>
         </div>
         <p className="text-lg text-gray-600">
-          Ask questions, generate summaries, and discover insights from your interaction history
+          Ask questions about contacts, generate summaries, and discover insights from your interactions and relationships
         </p>
       </div>
 
@@ -206,10 +209,10 @@ const AiSummarizer = () => {
             {chatMessages.length === 0 && (
               <div className="text-center py-12">
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Ask me anything about your interactions
+                  Ask me anything about your contacts and interactions
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  I can help you find information, recall conversations, and understand patterns
+                  I can help you find contact info, recall conversations, track relationships, and understand patterns
                 </p>
                 <div className="max-w-2xl mx-auto space-y-2">
                   <p className="text-sm font-medium text-gray-700 mb-3">Try asking:</p>
@@ -275,7 +278,7 @@ const AiSummarizer = () => {
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask a question about your interactions..."
+                placeholder="Ask about contacts, interactions, or relationships..."
                 className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl
                   focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
                 disabled={chatLoading}

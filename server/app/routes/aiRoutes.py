@@ -171,15 +171,16 @@ def summarize_contact_interactions(
 @router.post("/rag/query")
 def rag_query(
     request: RAGQueryRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Answer a question using RAG over interaction history
-    Uses ChromaDB for semantic search and Gemini for answer generation
+    Answer a question using RAG over interaction history, contacts, and conversation data
+    Uses ChromaDB for semantic search, PostgreSQL for structured data, and Gemini for answer generation
     """
     try:
         collection = get_conversation_collection()
-        rag_engine = InteractionRAG(collection)
+        rag_engine = InteractionRAG(collection, db_session=db)
         
         result = rag_engine.query(
             question=request.question,
@@ -199,6 +200,7 @@ def rag_query(
 @router.post("/rag/multi-turn")
 def rag_multi_turn(
     request: MultiTurnRAGRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -206,7 +208,7 @@ def rag_multi_turn(
     """
     try:
         collection = get_conversation_collection()
-        rag_engine = InteractionRAG(collection)
+        rag_engine = InteractionRAG(collection, db_session=db)
         
         result = rag_engine.multi_turn_query(
             question=request.question,
@@ -226,6 +228,7 @@ def rag_multi_turn(
 @router.post("/insights")
 def get_insights(
     request: InsightsRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -233,7 +236,7 @@ def get_insights(
     """
     try:
         collection = get_conversation_collection()
-        rag_engine = InteractionRAG(collection)
+        rag_engine = InteractionRAG(collection, db_session=db)
         
         result = rag_engine.get_insights(
             user_id=current_user.id,
@@ -244,6 +247,36 @@ def get_insights(
         
     except Exception as e:
         print(f"Error in insights endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/rag/contacts")
+def rag_contacts_query(
+    request: RAGQueryRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Answer questions specifically about contacts
+    Optimized for contact-related queries (phone numbers, emails, relationships, etc.)
+    """
+    try:
+        collection = get_conversation_collection()
+        rag_engine = InteractionRAG(collection, db_session=db)
+        
+        # Force contact context retrieval
+        result = rag_engine.query(
+            question=request.question,
+            user_id=current_user.id,
+            n_results=request.n_results,
+            include_context=request.include_context
+        )
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in contacts RAG query endpoint: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
