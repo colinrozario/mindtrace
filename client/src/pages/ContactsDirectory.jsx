@@ -86,7 +86,6 @@ const ContactsDirectory = () => {
   const formatLastSeen = (timestamp) => {
     if (!timestamp) return 'Never';
     return formatRelativeTime(timestamp).replace(' ago', '').replace('minutes', 'min').replace('minute', 'min').replace('hours', 'h').replace('hour', 'h').replace('days', 'd').replace('day', 'd');
-    }
   };
 
   return (

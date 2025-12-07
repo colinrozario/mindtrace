@@ -8,10 +8,10 @@ import { formatToIST } from '../utils/timeFormat';
 
 const ContactDetailModal = ({ contact, onClose, onEdit }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  
   const formatLastSeen = (timestamp) => {
     if (!timestamp) return 'Never';
     return formatToIST(timestamp);
-    }
   };
 
   const handleEdit = () => {
@@ -68,7 +68,7 @@ const ContactDetailModal = ({ contact, onClose, onEdit }) => {
             </div>
             <div className="bg-gray-50 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Total Interactions</p>
-              <p className="font-semibold text-gray-900">{contact.totalInteractions || 0}</p>
+              <p className="font-semibold text-gray-900">{contact.total_interactions || 0}</p>
             </div>
             <div className="bg-gray-50 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Visit Frequency</p>

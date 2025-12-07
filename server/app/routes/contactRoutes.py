@@ -37,8 +37,16 @@ def get_photo_url(contact_id: int, has_photo: bool, request: Request) -> Optiona
     base_url = str(request.base_url).rstrip('/')
     return f"{base_url}/contacts/{contact_id}/photo"
 
-def contact_to_response(contact: Contact, request: Request) -> dict:
+def contact_to_response(contact: Contact, request: Request, db: Optional[Session] = None) -> dict:
     """Convert a Contact ORM object to a response dict, handling binary photo data"""
+    # Calculate total interactions if db session is provided
+    total_interactions = 0
+    if db:
+        from ..models import Interaction
+        total_interactions = db.query(Interaction).filter(
+            Interaction.contact_id == contact.id
+        ).count()
+    
     return {
         "id": contact.id,
         "user_id": contact.user_id,
@@ -54,7 +62,8 @@ def contact_to_response(contact: Contact, request: Request) -> dict:
         "last_seen": contact.last_seen,
         "is_active": contact.is_active,
         "profile_photo": None,  # Never return binary data
-        "profile_photo_url": get_photo_url(contact.id, contact.profile_photo is not None, request)
+        "profile_photo_url": get_photo_url(contact.id, contact.profile_photo is not None, request),
+        "total_interactions": total_interactions
     }
 
 def sync_contact_to_chroma(contact_id: int, profile_photo: bytes, name: str, relationship: str, user_id: int):
@@ -240,6 +249,7 @@ class ContactResponse(ContactBase):
     last_seen: Optional[datetime] = None
     is_active: bool
     profile_photo_url: Optional[str] = None
+    total_interactions: Optional[int] = 0
     
     class Config:
         from_attributes = True
@@ -253,7 +263,7 @@ def get_contacts(
     current_user: User = Depends(get_current_user)
 ):
     contacts = db.query(Contact).filter(Contact.user_id == current_user.id, Contact.is_active == True).offset(skip).limit(limit).all()
-    return [contact_to_response(contact, request) for contact in contacts]
+    return [contact_to_response(contact, request, db) for contact in contacts]
 
 @router.post("/", response_model=ContactResponse)
 def create_contact(
@@ -324,7 +334,7 @@ async def create_contact_with_photo(
             db_contact.user_id
         )
         
-        return contact_to_response(db_contact, request)
+        return contact_to_response(db_contact, request, db)
         
     except Exception as e:
         print(f"Error creating contact with photo: {e}")
@@ -341,7 +351,7 @@ def get_contact(
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     
-    return contact_to_response(contact, request)
+    return contact_to_response(contact, request, db)
 
 @router.get("/{contact_id}/photo")
 def get_contact_photo(
@@ -386,7 +396,7 @@ def update_contact(
     
     db.commit()
     db.refresh(db_contact)
-    return contact_to_response(db_contact, request)
+    return contact_to_response(db_contact, request, db)
 
 @router.put("/{contact_id}/with-photo", response_model=ContactResponse)
 async def update_contact_with_photo(
@@ -457,7 +467,7 @@ async def update_contact_with_photo(
                 db_contact.user_id
             )
 
-        return contact_to_response(db_contact, request)
+        return contact_to_response(db_contact, request, db)
         
     except Exception as e:
         print(f"Error updating contact with photo: {e}")
