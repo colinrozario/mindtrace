@@ -39,6 +39,7 @@ class InteractionRAG:
         
         try:
             from app.models import Contact
+            from datetime import timezone, timedelta
             
             query = self.db.query(Contact).filter(
                 Contact.user_id == user_id,
@@ -50,8 +51,18 @@ class InteractionRAG:
             
             contacts = query.all()
             
+            # IST timezone (UTC+5:30)
+            ist_tz = timezone(timedelta(hours=5, minutes=30))
+            
             contact_list = []
             for contact in contacts:
+                # Format last_seen to IST
+                last_seen_ist = None
+                if contact.last_seen:
+                    # Convert to IST and format as readable string
+                    last_seen_dt = contact.last_seen.replace(tzinfo=timezone.utc).astimezone(ist_tz)
+                    last_seen_ist = last_seen_dt.strftime("%d %B %Y, %I:%M %p IST")
+                
                 contact_list.append({
                     "id": contact.id,
                     "name": contact.name,
@@ -61,7 +72,7 @@ class InteractionRAG:
                     "email": contact.email,
                     "notes": contact.notes,
                     "visit_frequency": contact.visit_frequency,
-                    "last_seen": contact.last_seen.isoformat() if contact.last_seen else None
+                    "last_seen": last_seen_ist
                 })
             
             return contact_list
@@ -86,6 +97,7 @@ class InteractionRAG:
         try:
             from app.models import Interaction
             from sqlalchemy import func, desc
+            from datetime import timezone, timedelta as td
             
             query = self.db.query(Interaction).filter(Interaction.user_id == user_id)
             
@@ -115,16 +127,25 @@ class InteractionRAG:
             seven_days_ago = datetime.now() - timedelta(days=7)
             recent_count = query.filter(Interaction.timestamp >= seven_days_ago).count()
             
+            # IST timezone (UTC+5:30)
+            ist_tz = timezone(td(hours=5, minutes=30))
+            
+            # Format most recent date to IST
+            most_recent_date_ist = None
+            if most_recent and most_recent.timestamp:
+                most_recent_dt = most_recent.timestamp.replace(tzinfo=timezone.utc).astimezone(ist_tz)
+                most_recent_date_ist = most_recent_dt.strftime("%d %B %Y, %I:%M %p IST")
+            
             return {
                 "total_interactions": total_count,
                 "recent_interactions_7d": recent_count,
-                "most_recent_date": most_recent.timestamp.isoformat() if most_recent and most_recent.timestamp else None,
+                "most_recent_date": most_recent_date_ist,
                 "most_recent_contact": most_recent.contact_name if most_recent else None,
                 "top_contacts": [
                     {
                         "name": name,
                         "count": count,
-                        "last_interaction": last_interaction.isoformat() if last_interaction else None
+                        "last_interaction": last_interaction.replace(tzinfo=timezone.utc).astimezone(ist_tz).strftime("%d %B %Y, %I:%M %p IST") if last_interaction else None
                     }
                     for name, count, last_interaction in contact_counts
                 ]
@@ -174,15 +195,30 @@ class InteractionRAG:
                 # Try to extract contact name from question
                 # But if asking about groups (family, friends, etc.), get all contacts
                 contact_name = None
-                group_keywords = ['family', 'friends', 'all', 'contacts', 'everyone', 'people']
+                group_keywords = ['family', 'friends', 'all', 'contacts', 'everyone', 'people', 'most recently', 'recently']
                 is_group_query = any(keyword in question_lower for keyword in group_keywords)
                 
                 if not is_group_query:
-                    # Only filter by name if not asking about a group
-                    for word in question.split():
-                        if len(word) > 2 and word[0].isupper() and word.lower() not in ['who', 'what', 'when', 'where', 'why', 'how']:
-                            contact_name = word
-                            break
+                    # Extract potential names from the question
+                    # Look for capitalized words or words after common name indicators
+                    import re
+                    
+                    # Common patterns for asking about specific people
+                    name_patterns = [
+                        r'(?:about|with|see|saw|talk|spoke|met|call|called)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+                        r'(?:is|was)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+                        r'\b([A-Z][a-z]+)(?:\s|\'s|\?|$)',
+                    ]
+                    
+                    for pattern in name_patterns:
+                        matches = re.findall(pattern, question)
+                        if matches:
+                            # Filter out common question words
+                            excluded = {'Who', 'What', 'When', 'Where', 'Why', 'How', 'I', 'The', 'A', 'An'}
+                            potential_names = [m for m in matches if m not in excluded]
+                            if potential_names:
+                                contact_name = potential_names[0]
+                                break
                 
                 contacts = self._get_contact_info(user_id, contact_name)
                 
@@ -280,10 +316,17 @@ The user asked: "{question}"
 CRITICAL INSTRUCTIONS:
 - ONLY use the information provided above in the CONTACT INFORMATION, INTERACTION STATISTICS, and RELEVANT INTERACTIONS sections
 - DO NOT make up, invent, or hallucinate any contact names, phone numbers, emails, or other data
-- If the sections above are empty or say "No relevant interactions found", you MUST tell the user that no data was found
-- If a specific contact is not listed above, you MUST say that contact is not in the database
+- If a specific contact is not listed in CONTACT INFORMATION, you MUST say that contact is not in the database
 - NEVER create example or placeholder data like "555-123-4567" or "example.com" emails
 - If you don't have the information to answer the question, clearly state what information is missing
+
+IMPORTANT - Understanding "Last Seen" vs "Interactions":
+- "Last Seen" in CONTACT INFORMATION refers to when the user physically saw or met the contact in person
+- "Interactions" in RELEVANT INTERACTIONS refers to recorded conversations or meetings
+- If the user asks "when did I last see/saw [person]", use the "Last Seen" field from CONTACT INFORMATION
+- If the user asks about conversations or what was discussed, use RELEVANT INTERACTIONS
+- If you have "Last Seen" data but no interaction records, that's perfectly fine - just answer based on Last Seen
+- Do NOT say "no interactions found" when you have Last Seen data - they are different things
 
 Based ONLY on the actual data provided above, please provide a helpful, accurate, and conversational answer to the user's question.
 
@@ -293,9 +336,9 @@ Guidelines:
 - If you have contact information (phone, email), include it when asked
 - If you have statistics, use them to provide insights
 - Use a friendly, conversational tone
-- Cite which sources you're referencing (e.g., "According to your contact info..." or "In your conversation with John...")
+- When answering "when did I last see X", use the Last Seen field and don't mention interactions unless asked
 - If the data doesn't fully answer the question, say so honestly and explain what's missing
-- If there's no data at all, tell the user they need to add contacts or interactions first
+- If there's no data at all, tell the user they need to add contacts or record interactions first
 
 FORMATTING INSTRUCTIONS:
 - Write in PLAIN TEXT only - NO markdown formatting
