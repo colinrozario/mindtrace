@@ -11,7 +11,7 @@ class InteractionSummarizer:
     def __init__(self):
         # The client gets the API key from the environment variable `GEMINI_API_KEY`
         self.client = genai.Client()
-        self.model_name = 'gemini-2.0-flash-exp'
+        self.model_name = 'gemini-2.5-flash'
     
     def summarize_interactions(
         self, 
@@ -132,6 +132,8 @@ Please provide a BRIEF summary (2-3 paragraphs) covering:
 4. Any notable events or important moments
 
 Keep it concise and highlight only the most important information.
+
+FORMATTING: Write in plain text only. Do NOT use markdown formatting like **bold**, *italic*, or bullet points with asterisks/dashes. Use numbered lists or paragraph form.
 """
         
         elif summary_type == "detailed":
@@ -146,6 +148,8 @@ Please provide a DETAILED summary covering:
 7. Follow-up items or unresolved matters
 
 Be thorough and include specific details from the interactions.
+
+FORMATTING: Write in plain text only. Do NOT use markdown formatting like **bold**, *italic*, or bullet points with asterisks/dashes. Use numbered lists or paragraph form.
 """
         
         elif summary_type == "analytical":
@@ -160,10 +164,12 @@ Please provide an ANALYTICAL summary covering:
 7. Recommendations for maintaining or improving relationships
 
 Focus on insights, patterns, and actionable observations.
+
+FORMATTING: Write in plain text only. Do NOT use markdown formatting like **bold**, *italic*, or bullet points with asterisks/dashes. Use numbered lists or paragraph form.
 """
         
         else:
-            prompt = base_prompt + "\nPlease provide a summary of these interactions."
+            prompt = base_prompt + "\nPlease provide a summary of these interactions.\n\nFORMATTING: Write in plain text only. Do NOT use markdown formatting."
         
         # Add focus areas if specified
         if focus_areas:
@@ -210,6 +216,8 @@ Please provide a comprehensive summary of the relationship with {contact_name} i
 6. Suggestions for maintaining or strengthening the relationship
 
 Be specific and reference actual interactions when relevant.
+
+FORMATTING: Write in plain text only. Do NOT use markdown formatting like **bold**, *italic*, or bullet points with asterisks/dashes. Use numbered lists or paragraph form.
 """
         
         try:
