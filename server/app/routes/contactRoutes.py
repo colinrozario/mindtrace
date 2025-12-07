@@ -373,6 +373,7 @@ def get_contact_photo(
 def update_contact(
     contact_id: int, 
     contact_update: ContactUpdate, 
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -385,7 +386,7 @@ def update_contact(
     
     db.commit()
     db.refresh(db_contact)
-    return db_contact
+    return contact_to_response(db_contact, request)
 
 @router.put("/{contact_id}/with-photo", response_model=ContactResponse)
 async def update_contact_with_photo(
