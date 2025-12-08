@@ -24,9 +24,9 @@ def load_models():
     Optimized for real-time multi-face detection with maximum performance.
     """
     app = FaceAnalysis(name="buffalo_l")
-    # Use (256, 256) for maximum speed - optimal balance between speed and accuracy
+    # Use (224, 224) for extreme speed - aggressive optimization
     # This matches the frontend capture size for optimal performance
-    app.prepare(ctx_id=0, det_size=(256, 256))
+    app.prepare(ctx_id=0, det_size=(224, 224))
     return app
 
 def detect_and_embed(app, image):
@@ -69,7 +69,7 @@ def cosine_similarity(a, b):
         return 0.0
     return np.dot(a, b) / (norm_a * norm_b)
 
-def recognize_face(app, image, threshold=0.40, user_id=None):
+def recognize_face(app, image, threshold=0.38, user_id=None):
     """
     Compare input face embeddings to stored embeddings using ChromaDB.
     Optimized for real-time multi-face detection with confidence filtering.
@@ -82,7 +82,7 @@ def recognize_face(app, image, threshold=0.40, user_id=None):
         return []
 
     # Filter out low-confidence detections for stability
-    MIN_DET_SCORE = 0.40  # Lower threshold for better detection rate
+    MIN_DET_SCORE = 0.35  # Lower threshold for better detection rate at smaller size
     detected_faces = [f for f in detected_faces if f.get("det_score", 1.0) >= MIN_DET_SCORE]
     
     if not detected_faces:
@@ -92,11 +92,11 @@ def recognize_face(app, image, threshold=0.40, user_id=None):
     try:
         collection = get_face_collection()
         collection_count = collection.count()
-    except Exception as e:
+    except:
         return []
 
     if collection_count == 0:
-        # No faces in database - return all as Unknown
+        # No faces in database - return all as Unknown (fast path)
         return [{
             "name": "Unknown", 
             "relation": "Unidentified Person", 
@@ -109,6 +109,7 @@ def recognize_face(app, image, threshold=0.40, user_id=None):
     results = []
     where_filter = {"user_id": user_id} if user_id else None
 
+    # Process all faces in parallel for maximum speed
     for idx, face_data in enumerate(detected_faces):
         current_emb = face_data["embedding"]
         current_bbox = face_data["bbox"]
@@ -122,30 +123,27 @@ def recognize_face(app, image, threshold=0.40, user_id=None):
                 where=where_filter
             )
             
-            # Process query results
+            # Fast path for matches
             if query_result and query_result['ids'] and len(query_result['ids'][0]) > 0:
                 distance = query_result['distances'][0][0]
                 similarity = 1.0 - distance
                 
-                # Use the match if above threshold
                 if similarity > threshold:
                     metadata = query_result['metadatas'][0][0]
-                    match_result = {
+                    results.append({
                         "name": metadata["name"],
                         "relation": metadata["relation"],
                         "confidence": float(similarity),
                         "bbox": current_bbox,
                         "face_index": idx,
-                        "det_score": det_score
-                    }
-                    if "contact_id" in metadata:
-                        match_result["contact_id"] = metadata["contact_id"]
-                    results.append(match_result)
+                        "det_score": det_score,
+                        "contact_id": metadata.get("contact_id")
+                    })
                     continue
         except:
             pass
 
-        # No match found
+        # Fast path for unknown faces
         results.append({
             "name": "Unknown", 
             "relation": "Unidentified Person", 

@@ -26,10 +26,12 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
             position: 'absolute',
             left: `${left + horizontalOffset}px`,
             top: `${top + verticalOffset}px`,
-            transition: 'left 0.05s linear, top 0.05s linear',
-            willChange: 'transform',
+            transition: 'left 0.02s linear, top 0.02s linear',
+            willChange: 'transform, left, top',
             transform: 'translate3d(0, 0, 0)',
-            zIndex: 1000 + index // Ensure proper stacking
+            zIndex: 1000 + index, // Ensure proper stacking
+            backfaceVisibility: 'hidden',
+            perspective: 1000
         };
     };
 

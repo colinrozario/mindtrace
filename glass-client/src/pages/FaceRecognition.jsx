@@ -83,12 +83,11 @@ const FaceRecognition = () => {
     const isProcessingRef = useRef(false);
     const loopActiveRef = useRef(false);
     const lastRequestTimeRef = useRef(0);
-    const MIN_REQUEST_INTERVAL = 16; // ~60 FPS for maximum throughput
+    const MIN_REQUEST_INTERVAL = 8; // ~120 FPS for absolute maximum throughput
     const faceTrackingCache = useRef(new Map()); // Cache for smoother face tracking
     const velocityCache = useRef(new Map()); // Track velocity for predictive smoothing
     const frameInterpolationRef = useRef(null); // For frame interpolation between API calls
     const requestAnimationFrameId = useRef(null); // Track RAF for cleanup
-    const pendingRequestRef = useRef(null); // Track pending requests for cancellation
 
     const captureFrame = () => {
         if (videoRef.current && canvasRef.current) {
@@ -98,12 +97,12 @@ const FaceRecognition = () => {
 
             if (video.videoWidth === 0 || video.videoHeight === 0) return null;
 
-            // Use 256px for maximum speed - optimal balance
-            const MAX_DIM = 256;
+            // Use 224px for extreme speed - aggressive optimization
+            const MAX_DIM = 224;
             let width = video.videoWidth;
             let height = video.videoHeight;
 
-            // Scale to fit within 256x256 while maintaining aspect ratio
+            // Scale to fit within 224x224 while maintaining aspect ratio
             const scale = Math.min(MAX_DIM / width, MAX_DIM / height);
             width = Math.round(width * scale);
             height = Math.round(height * scale);
@@ -119,7 +118,7 @@ const FaceRecognition = () => {
             return new Promise(resolve => {
                 canvas.toBlob(blob => {
                     resolve(blob);
-                }, 'image/jpeg', 0.6); // Lower quality for maximum speed
+                }, 'image/jpeg', 0.5); // Aggressive compression for extreme speed
             });
         }
         return null;
@@ -132,8 +131,8 @@ const FaceRecognition = () => {
         const videoWidth = video.videoWidth;
         const videoHeight = video.videoHeight;
         
-        // Match the MAX_DIM used in captureFrame (now 256)
-        const MAX_DIM = 256;
+        // Match the MAX_DIM used in captureFrame (now 224)
+        const MAX_DIM = 224;
         const scale = Math.min(MAX_DIM / videoWidth, MAX_DIM / videoHeight);
         let sentWidth = Math.round(videoWidth * scale);
         let sentHeight = Math.round(videoHeight * scale);
@@ -454,7 +453,7 @@ const FaceRecognition = () => {
             });
 
             if (processedResults.length > 0) {
-                // Maximum responsiveness with minimal smoothing
+                // Extreme responsiveness with ultra-minimal smoothing
                 const smoothedResults = processedResults.map(result => {
                     const cacheKey = result.name + (result.contact_id || '');
                     const cached = faceTrackingCache.current.get(cacheKey);
@@ -469,8 +468,8 @@ const FaceRecognition = () => {
                             height: result.position.height - cached.height
                         };
                         
-                        // Minimal velocity smoothing for maximum responsiveness
-                        const velocitySmooth = 0.85;
+                        // Ultra-minimal velocity smoothing for extreme responsiveness
+                        const velocitySmooth = 0.9;
                         const smoothedVelocity = velocity ? {
                             left: velocity.left * (1 - velocitySmooth) + newVelocity.left * velocitySmooth,
                             top: velocity.top * (1 - velocitySmooth) + newVelocity.top * velocitySmooth,
@@ -480,9 +479,9 @@ const FaceRecognition = () => {
                         
                         velocityCache.current.set(cacheKey, smoothedVelocity);
                         
-                        // Maximum responsiveness - minimal lag
-                        const smoothFactor = 0.85; // Very high = maximum responsiveness
-                        const predictFactor = 0.2; // Low prediction for stability
+                        // Extreme responsiveness - near-zero lag
+                        const smoothFactor = 0.92; // Extremely high = near-instant response
+                        const predictFactor = 0.15; // Minimal prediction for maximum stability
                         
                         result.position = {
                             left: cached.left * (1 - smoothFactor) + result.position.left * smoothFactor + smoothedVelocity.left * predictFactor,
@@ -502,11 +501,20 @@ const FaceRecognition = () => {
                 setRecognitionResult(smoothedResults);
                 lastResultRef.current = smoothedResults;
                 
-                // Update debug status with face info
-                const faceCount = smoothedResults.length;
-                const faceNames = smoothedResults.slice(0, 3).map(r => r.name).join(", ");
-                const moreText = faceCount > 3 ? ` +${faceCount - 3}` : '';
-                setDebugStatus(`${faceCount} face${faceCount > 1 ? 's' : ''}: ${faceNames}${moreText}`);
+                // Update debug status with face info (non-critical, defer if busy)
+                if (window.requestIdleCallback) {
+                    window.requestIdleCallback(() => {
+                        const faceCount = smoothedResults.length;
+                        const faceNames = smoothedResults.slice(0, 3).map(r => r.name).join(", ");
+                        const moreText = faceCount > 3 ? ` +${faceCount - 3}` : '';
+                        setDebugStatus(`${faceCount} face${faceCount > 1 ? 's' : ''}: ${faceNames}${moreText}`);
+                    });
+                } else {
+                    const faceCount = smoothedResults.length;
+                    const faceNames = smoothedResults.slice(0, 3).map(r => r.name).join(", ");
+                    const moreText = faceCount > 3 ? ` +${faceCount - 3}` : '';
+                    setDebugStatus(`${faceCount} face${faceCount > 1 ? 's' : ''}: ${faceNames}${moreText}`);
+                }
                 
                 // --- ASR Trigger ---
                 // If we detect a face, start recording if not already
@@ -560,8 +568,8 @@ const FaceRecognition = () => {
             
             setDebugStatus(`Err: ${err.message}`);
             
-            // Minimal backoff on errors for faster recovery
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Ultra-minimal backoff on errors for instant recovery
+            await new Promise(resolve => setTimeout(resolve, 50));
         } finally {
             isProcessingRef.current = false;
             if (loopActiveRef.current) {
@@ -581,8 +589,8 @@ const FaceRecognition = () => {
             const velocity = velocityCache.current.get(cacheKey);
             
             if (velocity && result.position) {
-                // Minimal interpolation for maximum responsiveness
-                const interpolationFactor = 0.2; // Minimal for less jitter
+                // Ultra-minimal interpolation for extreme smoothness
+                const interpolationFactor = 0.15; // Ultra-minimal for maximum stability
                 return {
                     ...result,
                     position: {
@@ -602,11 +610,11 @@ const FaceRecognition = () => {
     const startRecognitionLoop = () => {
         if (loopActiveRef.current) return;
         loopActiveRef.current = true;
-        setDebugStatus("Real-time Tracking Active");
+        setDebugStatus("Ultra-Fast Tracking Active");
         processFrame();
         
-        // Start frame interpolation at 60 FPS for ultra-smooth display
-        frameInterpolationRef.current = setInterval(interpolateFrames, 16); // ~60 FPS
+        // Start frame interpolation at 120 FPS for extreme smoothness
+        frameInterpolationRef.current = setInterval(interpolateFrames, 8); // ~120 FPS
     };
 
     useEffect(() => {
