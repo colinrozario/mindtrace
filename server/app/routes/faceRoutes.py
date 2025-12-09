@@ -59,16 +59,22 @@ async def recognize_face_endpoint(
                 contacts = db.query(Contact).filter(Contact.id.in_(contact_ids)).all()
                 contact_map = {c.id: c for c in contacts}
                 
-                # Batch query last interactions
-                last_interactions = db.query(Interaction).filter(
-                    Interaction.contact_id.in_(contact_ids)
-                ).order_by(Interaction.contact_id, Interaction.timestamp.desc()).all()
-                
-                # Group interactions by contact_id
-                interaction_map = {}
-                for interaction in last_interactions:
-                    if interaction.contact_id not in interaction_map:
-                        interaction_map[interaction.contact_id] = interaction
+                # Optimized: Fetch top 3 interactions per contact
+                interaction_map = {} 
+                for cid in contact_ids:
+                    recent = db.query(Interaction).filter(
+                        Interaction.contact_id == cid
+                    ).order_by(Interaction.timestamp.desc()).limit(3).all()
+                    
+                    if recent:
+                        formatted = []
+                        for r in recent:
+                             time_str = r.timestamp.strftime("%d %b") if r.timestamp else ""
+                             formatted.append({
+                                 "summary": r.summary,
+                                 "date": time_str
+                             })
+                        interaction_map[cid] = formatted
                 
                 # Enrich results
                 for res in result:
@@ -81,9 +87,10 @@ async def recognize_face_endpoint(
                             last_seen_time = contact.last_seen
                             res["last_seen_timestamp"] = last_seen_time.isoformat() if last_seen_time else None
                             
-                            # Get last interaction summary
-                            last_interaction = interaction_map.get(contact_id)
-                            res["last_conversation_summary"] = last_interaction.summary if last_interaction else None
+                            # Add history list
+                            history = interaction_map.get(contact_id, [])
+                            res["recent_interactions"] = history
+                            res["last_conversation_summary"] = history[0]["summary"] if history else None
                             
                             # Update last_seen to NOW
                             contact.last_seen = datetime.now(timezone.utc)
@@ -179,15 +186,26 @@ async def websocket_recognize(
                     contacts = db.query(Contact).filter(Contact.id.in_(contact_ids)).all()
                     contact_map = {c.id: c for c in contacts}
                     
-                    last_interactions = db.query(Interaction).filter(
-                        Interaction.contact_id.in_(contact_ids)
-                    ).order_by(Interaction.contact_id, Interaction.timestamp.desc()).all()
+                    # Optimized: Fetch top 3 interactions per contact
+                    # Since N (contacts) is small, simple loop is efficient enough and avoids complex SQL
+                    interaction_map = {} # contact_id -> list of summaries
                     
-                    interaction_map = {}
-                    for interaction in last_interactions:
-                        if interaction.contact_id not in interaction_map:
-                            interaction_map[interaction.contact_id] = interaction
-                    
+                    for cid in contact_ids:
+                        recent = db.query(Interaction).filter(
+                            Interaction.contact_id == cid
+                        ).order_by(Interaction.timestamp.desc()).limit(3).all()
+                        
+                        if recent:
+                            # Format nicely
+                            formatted = []
+                            for r in recent:
+                                time_str = r.timestamp.strftime("%d %b") if r.timestamp else ""
+                                formatted.append({
+                                    "summary": r.summary,
+                                    "date": time_str
+                                })
+                            interaction_map[cid] = formatted
+
                     for res in result:
                         if res.get("name") != "Unknown" and "contact_id" in res:
                             contact_id = res["contact_id"]
@@ -197,8 +215,12 @@ async def websocket_recognize(
                                 last_seen_time = contact.last_seen
                                 res["last_seen_timestamp"] = last_seen_time.isoformat() if last_seen_time else None
                                 
-                                last_interaction = interaction_map.get(contact_id)
-                                res["last_conversation_summary"] = last_interaction.summary if last_interaction else None
+                                # Add history list
+                                history = interaction_map.get(contact_id, [])
+                                res["recent_interactions"] = history
+                                
+                                # Backward compatibility
+                                res["last_conversation_summary"] = history[0]["summary"] if history else None
                                 
                                 contact.last_seen = datetime.now(timezone.utc)
                     
