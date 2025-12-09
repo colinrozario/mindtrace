@@ -24,7 +24,6 @@ const Navbar = () => {
   }, [isMenuOpen]);
 
   const navLinks = [
-    { name: 'Overview', href: '#overview' },
     { name: 'Features', href: '#features' },
     { name: 'Specs', href: '#support' },
     { name: 'FAQ', href: '#faq' },
@@ -109,7 +108,10 @@ const Navbar = () => {
             <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
               <h4 className="font-semibold text-gray-900 mb-2">Ready to start?</h4>
               <p className="text-sm text-gray-500 mb-4">Join the waitlist and be the first to experience the future.</p>
-              <button className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl font-medium hover:bg-gray-800 transition-all shadow-lg flex items-center justify-center gap-2">
+              <button 
+                onClick={() => navigate('/login')}
+                className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl font-medium hover:bg-gray-800 transition-all shadow-lg flex items-center justify-center gap-2"
+              >
                 Join Waitlist
               </button>
             </div>
