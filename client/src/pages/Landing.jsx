@@ -14,7 +14,7 @@ const Landing = () => {
   // Smooth Scroll Setup
   useEffect(() => {
     const lenis = new Lenis({
-      duration: 1.2,
+      duration: 0.8, 
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       direction: 'vertical',
       gestureDirection: 'vertical',
@@ -37,14 +37,32 @@ const Landing = () => {
       window.history.replaceState(null, '', window.location.pathname);
     }
 
+    // Intercept anchor links for smooth scrolling
+    const handleAnchorClick = (e) => {
+      const target = e.target.closest('a');
+      if (!target) return;
+      
+      const href = target.getAttribute('href');
+      if (href?.startsWith('#')) {
+        e.preventDefault();
+        const element = document.querySelector(href);
+        if (element) {
+          lenis.scrollTo(element);
+        }
+      }
+    };
+
+    document.addEventListener('click', handleAnchorClick);
+
     return () => {
       lenis.destroy();
+      document.removeEventListener('click', handleAnchorClick);
     };
   }, []);
 
   // Parallax hook
   const { scrollY } = useScroll();
-  const heroY = useTransform(scrollY, [0, 500], [0, 150]);
+  const heroY = useTransform(scrollY, [0, 500], [0, 100]); // Reduced parallax range
   const opacityHero = useTransform(scrollY, [0, 400], [1, 0]);
 
   // Animation Variants
@@ -74,6 +92,13 @@ const Landing = () => {
       scale: 1,
       opacity: 1,
       transition: { duration: 0.6, ease: "easeOut" }
+    }
+  };
+
+  const scrollToContent = () => {
+    const element = document.getElementById('product-showcase');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
@@ -123,7 +148,7 @@ const Landing = () => {
                 className="group relative bg-gray-900 text-white px-10 py-4 rounded-full font-medium text-lg overflow-hidden transition-all duration-300 hover:shadow-2xl hover:scale-105 active:scale-95"
               >
                 <span className="relative z-10">Join the Waitlist</span>
-                <div className="absolute inset-0 bg-indigo-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300 ease-out" />
+                <div className="absolute inset-0 bg-linear-to-r from-gray-900 via-indigo-900 to-indigo-900 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300 ease-out" />
               </button>
             </motion.div>
           </motion.div>
@@ -133,14 +158,15 @@ const Landing = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.5, duration: 1 }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce text-gray-400"
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce text-gray-400 cursor-pointer"
+          onClick={scrollToContent}
         >
           <ChevronDown className="h-6 w-6" />
         </motion.div>
       </section>
 
       {/* Product Image Section */}
-      <section className="py-20 px-4 md:px-6 lg:px-8 bg-gray-50 perspective-1000">
+      <section id="product-showcase" className="py-20 px-4 md:px-6 lg:px-8 bg-gray-50 perspective-1000">
         <div className="max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0, rotateX: 20, y: 100 }}
