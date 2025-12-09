@@ -307,16 +307,27 @@ async def websocket_asr(
     except Exception as e:
         print(f"Error finding contact: {e}")
     
-    audio_buffer = []
+    # --- CHANGED: Use Temporary File for Buffering ---
+    import tempfile
+    
+    # Create a temporary file to store the audio session
+    # We use delete=False to keep it until we manually remove it after processing
+    # suffix='.bin' just to denote raw bytes
+    session_audio_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pcm')
+    start_time = asyncio.get_event_loop().time()
+    
+    audio_buffer_ram = [] # Keep small buffer for real-time subtitles only
     chunk_counter = 0
-    total_chunks_received = 0
-    TRANSCRIBE_INTERVAL_CHUNKS = 3 # Optimized for balance between speed and accuracy
-    RMS_THRESHOLD = 0.0003 # Highly sensitive for better voice detection
+    total_bytes_received = 0
+    
+    TRANSCRIBE_INTERVAL_CHUNKS = 5 # Slightly increased to batch better
+    RMS_THRESHOLD = 0.002 # Adjusted: 0.0003 was too sensitive, picking up noise. 0.005 is normal speech.
+    
     last_activity_time = asyncio.get_event_loop().time()
-    IDLE_TIMEOUT = 45.0 # Extended timeout for better user experience
-    last_transcript = ""  # Track last transcript to avoid duplicates
+    IDLE_TIMEOUT = 60.0 # Extended further
+    last_transcript = ""  
     last_ping_time = asyncio.get_event_loop().time()
-    PING_INTERVAL = 20.0  # Send ping every 20 seconds to keep connection alive
+    PING_INTERVAL = 20.0 
 
     if not asr_engine:
         print("❌ Error: ASR Engine is not initialized")
@@ -361,56 +372,54 @@ async def websocket_asr(
                 continue
             
             # Update activity time
-            last_activity_time = asyncio.get_event_loop().time()
+            last_activity_time = current_time
             
-            # Convert bytes to numpy array (float32)
+            # 1. Write raw bytes immediately to disk (Append)
             try:
+                session_audio_file.write(data)
+                total_bytes_received += len(data)
+            except Exception as e:
+                print(f"Error writing to temp file: {e}")
+            
+            # 2. Process for Real-time Subtitles (Keep small RAM buffer)
+            try:
+                # Convert bytes to numpy array (float32) for fast processing
                 chunk = np.frombuffer(data, dtype=np.float32)
-                if len(chunk) == 0:
-                    continue
                 
-                total_chunks_received += 1
-                audio_buffer.append(chunk)
+                audio_buffer_ram.append(chunk)
                 chunk_counter += 1
                 
-                # Log every 20 chunks to avoid spam
-                if total_chunks_received % 20 == 0:
-                    print(f"Received {total_chunks_received} audio chunks ({len(chunk)} samples each)")
+                # Manage RAM buffer size (Running window of ~6 seconds)
+                # If too large, pop from front (we have full backup on disk)
+                # 6s * 16000 = 96000 samples
+                current_ram_samples = sum(len(c) for c in audio_buffer_ram)
+                if current_ram_samples > 96000:
+                    # Remove chunks from beginning until we are under limit
+                    while len(audio_buffer_ram) > 1 and sum(len(c) for c in audio_buffer_ram) > 96000:
+                         audio_buffer_ram.pop(0)
+
+                # Log periodic
+                if chunk_counter % 50 == 0:
+                     print(f"Session active: {(current_time - start_time):.1f}s, Bytes: {total_bytes_received}")
+
             except Exception as e:
-                print(f"Error converting audio data: {e}")
+                print(f"Error converting/buffering audio: {e}")
                 continue
             
             # --- Incremental Transcription for Subtitles ---
-            # Optimized for smoother, faster transcription
             if chunk_counter >= TRANSCRIBE_INTERVAL_CHUNKS and asr_engine:
                 chunk_counter = 0
                 try:
-                    # Efficient buffer management with rolling window
-                    current_full = np.concatenate(audio_buffer)
+                    # Create continuous buffer from RAM chunks
+                    current_window = np.concatenate(audio_buffer_ram)
                     
-                    # Limit buffer growth - Keep last 20 seconds max to prevent OOM
-                    # 16000 * 20 = 320,000 samples
-                    MAX_BUFFER_SAMPLES = 320000
-                    if len(current_full) > MAX_BUFFER_SAMPLES:
-                         # Keep last 12 seconds only
-                         current_full = current_full[-192000:]
-                         # Reset buffer to single chunk to free memory
-                         audio_buffer = [current_full]
-
-                    # Adaptive transcription window based on buffer size
-                    # Use 4-6 seconds for optimal balance between speed and accuracy
-                    SAMPLES_FOR_TRANSCRIPTION = min(96000, len(current_full))  # 6 seconds max
-                    transcribe_window = current_full[-SAMPLES_FOR_TRANSCRIPTION:]
+                    # Enhanced VAD: RMS
+                    rms = np.sqrt(np.mean(current_window**2))
                     
-                    # Enhanced VAD: Check Energy Level (RMS) with better sensitivity
-                    rms = np.sqrt(np.mean(transcribe_window**2))
-                    
-                    # More aggressive speech detection
-                    if len(transcribe_window) > 8000 and rms > RMS_THRESHOLD:  # > 0.5s minimum
-                        # Run ASR on threadpool to avoid blocking WebSocket
-                        transcript = await asyncio.to_thread(asr_engine.transcribe_audio_chunk, transcribe_window)
+                    if len(current_window) > 8000 and rms > RMS_THRESHOLD:
+                         # Run ASR on threadpool
+                        transcript = await asyncio.to_thread(asr_engine.transcribe_audio_chunk, current_window)
                         
-                        # Only send if transcript changed or is new
                         if transcript and transcript.strip() and transcript != last_transcript:
                             last_transcript = transcript
                             print(f"✓ Subtitle: {transcript}")
@@ -419,17 +428,18 @@ async def websocket_asr(
                                 "text": transcript
                             })
                     else:
-                        # Send empty subtitle to clear if too quiet
-                        if rms <= RMS_THRESHOLD and last_transcript:
+                        # Clear subtitle if silence
+                         if rms <= RMS_THRESHOLD and last_transcript:
+                            # Only clear if we really think it's silent for a bit
+                            # Check if just the END is silent? No, straightforward RMS is okay for now.
                             last_transcript = ""
                             await websocket.send_json({
                                 "type": "subtitle",
                                 "text": ""
                             })
+
                 except Exception as e:
                     print(f"Incremental transcribe error: {e}")
-                    import traceback
-                    traceback.print_exc()
             # -----------------------------------------------
 
     except WebSocketDisconnect:
@@ -444,47 +454,56 @@ async def websocket_asr(
         # Always process and save the conversation on connection close
         print(f"Connection closed ({connection_close_reason}). Processing final conversation...")
         
-        # Process the buffer if we have audio
-        if audio_buffer and asr_engine:
-            try:
-                # Concatenate all chunks
-                full_audio = np.concatenate(audio_buffer)
+        # Flush file
+        session_audio_file.close() # Close handle to ensure flush
+        
+        try:
+            # Read full file back
+            file_size = os.path.getsize(session_audio_file.name)
+            print(f"Reading full audio session from disk: {file_size} bytes")
+            
+            if file_size > 0 and asr_engine:
+                 # Read raw bytes
+                with open(session_audio_file.name, "rb") as f:
+                    full_audio_bytes = f.read()
+                
+                # Convert to numpy
+                full_audio = np.frombuffer(full_audio_bytes, dtype=np.float32)
                 
                 duration_seconds = len(full_audio) / 16000
-                print(f"Total audio: {len(full_audio)} samples ({duration_seconds:.2f} seconds)")
-                print(f"Total chunks received: {total_chunks_received}")
+                print(f"Total audio duration: {duration_seconds:.2f} seconds")
                 
-                if len(full_audio) > 4800: # Ensure at least 0.3 seconds of audio
-                    print(f"Transcribing final audio...")
+                if duration_seconds > 0.5: # Minimum threshold
+                    print(f"Transcribing full session...")
+                    # For very long audio, we might want to split? 
+                    # Faster-whisper handles reasonable lengths well (30s+). 
+                    # If > 30s, it handles it internally via sliding window if configured, 
+                    # but simple transcribe works good enough for minutes usually.
+                    
                     transcript = await asyncio.to_thread(asr_engine.transcribe_audio_chunk, full_audio)
-                    print(f"✓ Final Transcript: {transcript}")
+                    print(f"✓ Final Complete Transcript: {transcript}")
                     
                     if transcript and transcript.strip():
-                        # Save to database and ChromaDB
-                        # The linker.link_and_save() method will:
-                        # 1. Save to JSON file (backward compatibility)
-                        # 2. Save to database as Interaction
-                        # 3. Generate embeddings and save to ChromaDB automatically
                         result = linker.link_and_save(profile_id, transcript, user_id=user_id, contact_id=contact_id)
                         if result:
-                            print(f"✓ Conversation saved to database and ChromaDB successfully")
-                            print(f"✓ Voice-to-text embeddings stored in ChromaDB for semantic search")
-                        else:
-                            print("⚠ Conversation save returned None")
+                            print(f"✓ Saved to DB/Chroma")
                     else:
-                        print("⚠ Empty transcript, not saving")
+                         print("⚠ Empty transcript")
                 else:
-                    print(f"⚠ Audio too short to transcribe ({duration_seconds:.2f}s)")
-                    
-            except Exception as e:
-                print(f"❌ Error processing audio buffer: {e}")
-                import traceback
-                traceback.print_exc()
-        elif not audio_buffer:
-            print("⚠ No audio data received")
-        elif not asr_engine:
-            print("❌ ASR Engine not available")
+                    print("⚠ Audio too short")
+
+        except Exception as e:
+            print(f"❌ Error processing final audio file: {e}")
+            import traceback
+            traceback.print_exc()
         
-        # Always close the database connection
+        # Cleanup temp file
+        try:
+            os.unlink(session_audio_file.name)
+            print("Cleanup: temp file deleted")
+        except Exception as e:
+            print(f"Error deleting temp file: {e}")
+            
+        # Close database connection
         db.close()
 

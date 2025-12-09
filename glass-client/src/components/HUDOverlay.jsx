@@ -27,7 +27,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
             transition: 'left 0.1s ease-out, top 0.1s ease-out',
             willChange: 'transform, left, top',
             transform: 'translate3d(0, 0, 0)',
-            zIndex: 1000 + index, 
+            zIndex: 1000 + index,
             backfaceVisibility: 'hidden',
             perspective: 1000
         };
@@ -52,45 +52,36 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
     const TagContent = ({ result, placement, variant = 'light' }) => {
         const lastSeen = formatISTTime(result.last_seen_timestamp);
         const summary = result.last_conversation_summary;
-        
+        const history = result.recent_interactions; // Array of {summary, date}
+
         const isDark = variant === 'dark';
-        
+
         // Dynamic styles based on variant
-        const containerClass = isDark 
-            ? "bg-black/60 backdrop-blur-xl border border-white/20 p-5 rounded-2xl shadow-2xl text-white min-w-[260px] max-w-[300px]"
-            : "bg-white/90 backdrop-blur-xl border border-white/50 p-6 rounded-2xl shadow-xl text-gray-900 min-w-[280px] max-w-[320px]";
-            
+        const containerClass = isDark
+            ? "bg-black/60 backdrop-blur-xl border border-white/20 p-5 rounded-2xl shadow-2xl text-white min-w-[260px] max-w-[340px]"
+            : "bg-white/90 backdrop-blur-xl border border-white/50 p-6 rounded-2xl shadow-xl text-gray-900 min-w-[280px] max-w-[360px]";
+
         const labelClass = isDark
             ? "text-[10px] font-bold tracking-wider uppercase text-indigo-400 mb-1 block"
             : "text-xs font-bold tracking-wider uppercase text-indigo-600 mb-1 block";
-            
+
         const nameClass = isDark
             ? "text-2xl font-bold leading-none tracking-tight mb-0.5"
             : "text-3xl font-bold leading-none tracking-tight mb-1";
-            
+
         const relationClass = isDark
             ? "text-sm font-medium opacity-80 text-gray-300 block"
             : "text-lg font-medium opacity-70 text-gray-600 block";
-            
+
         const metaLabelClass = isDark
             ? "text-[10px] font-bold uppercase text-gray-400 mt-0.5 whitespace-nowrap"
             : "text-xs font-bold uppercase text-indigo-400 mt-0.5 whitespace-nowrap";
-            
+
         const metaTextClass = isDark
             ? "text-xs font-medium text-gray-200"
             : "text-sm font-medium text-gray-700";
-            
-        const topicLabelClass = isDark
-             ? "text-[10px] font-bold uppercase text-gray-400"
-             : "text-xs font-bold uppercase text-indigo-400";
-             
-        const topicTextClass = isDark
-            ? "text-[11px] text-gray-300 leading-snug line-clamp-2 italic"
-            : "text-xs text-gray-600 leading-snug line-clamp-2 italic";
 
         // Line positioning based on placement
-        // If placement is 'right' (tag on right of face), line is on LEFT of tag
-        // If placement is 'left' (tag on left of face), line is on RIGHT of tag
         const isTagOnRight = placement === 'right';
 
         return (
@@ -104,26 +95,37 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                         <span className={relationClass}>{result.relation}</span>
                     </div>
 
-                    {(lastSeen || summary) && (
-                        <div className={`mt-2 pt-2 border-t flex flex-col gap-2 ${isDark ? 'border-white/10' : 'border-gray-200/50'}`}>
-                            {lastSeen && (
-                                <div className="flex items-start gap-2">
-                                    <span className={metaLabelClass}>Last Met</span>
-                                    <span className={metaTextClass}>{lastSeen}</span>
-                                </div>
-                            )}
-                            {summary && (
-                                <div className="flex flex-col gap-1">
-                                    <span className={topicLabelClass}>Last Topic</span>
-                                    <p className={topicTextClass}>
-                                        "{summary}"
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    <div className={`mt-2 pt-2 border-t flex flex-col gap-2 ${isDark ? 'border-white/10' : 'border-gray-200/50'}`}>
+                        {lastSeen && (
+                            <div className="flex items-start gap-2 mb-1">
+                                <span className={metaLabelClass}>Last Met</span>
+                                <span className={metaTextClass}>{lastSeen}</span>
+                            </div>
+                        )}
+
+                        {history && history.length > 0 ? (
+                            <div className="flex flex-col gap-2">
+                                <span className={metaLabelClass}>Past Conversations</span>
+                                {history.map((item, i) => (
+                                    <div key={i} className={`flex flex-col relative pl-3 border-l-2 ${isDark ? 'border-indigo-500/50' : 'border-indigo-200'}`}>
+                                        <span className={`text-[10px] font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>{item.date}</span>
+                                        <p className={`text-xs leading-snug italic ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                            "{item.summary}"
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : summary && (
+                            <div className="flex flex-col gap-1">
+                                <span className={metaLabelClass}>Last Topic</span>
+                                <p className={`text-xs leading-snug italic ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    "{summary}"
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 </div>
-                
+
                 {/* Connecting Line */}
                 {isTagOnRight ? (
                     <>
@@ -168,14 +170,14 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                 {/* Tracking Tags */}
                 {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.map((result, index) => {
                     if (!result.position) return null;
-                    
+
                     // Determine placement based on screen position
                     // If face is on left half (< 50vw), place tag on RIGHT
                     // If face is on right half (> 50vw), place tag on LEFT
                     const screenCenter = window.innerWidth / 2;
                     const faceCenter = result.position.left + result.position.width / 2;
                     const placement = faceCenter < screenCenter ? 'right' : 'left';
-                    
+
                     return (
                         <div key={`track-${result.trackId}`} style={getTagStyle(result.position, placement, index)}>
                             <TagContent result={result} placement={placement} variant="light" />
@@ -198,7 +200,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                 {/* Live Subtitles */}
                 {subtitle && subtitle.trim() && (
                     <div className="absolute bottom-20 left-1/2 -translate-x-1/2 max-w-3xl w-full text-center px-6">
-                         <div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl border-2 border-indigo-200 shadow-2xl">
+                        <div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl border-2 border-indigo-200 shadow-2xl">
                             <p className="text-gray-900 text-xl font-medium leading-relaxed tracking-wide">
                                 {subtitle}
                             </p>
@@ -239,11 +241,11 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
             {/* Tracking Tags - Minimal for Ray-Ban */}
             {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.map((result, index) => {
                 if (!result.position) return null;
-                
+
                 const screenCenter = window.innerWidth / 2;
                 const faceCenter = result.position.left + result.position.width / 2;
                 const placement = faceCenter < screenCenter ? 'right' : 'left';
-                
+
                 return (
                     <div key={`track-${result.trackId}`} style={getTagStyle(result.position, placement, index)}>
                         <TagContent result={result} placement={placement} variant="dark" />
@@ -251,31 +253,31 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                 );
             })}
 
-                {/* Info message when Unknown faces are detected */}
-                {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.length > 0 &&
-                    recognitionResult.every(r => r.name === 'Unknown') && (
-                        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 max-w-md">
-                            <div className="bg-indigo-600/90 backdrop-blur-md px-6 py-3 rounded-2xl border border-indigo-400/50 shadow-xl">
-                                <p className="text-white text-sm font-medium text-center">
-                                    💡 Upload contacts with photos to identify faces
-                                </p>
-                            </div>
-                        </div>
-                    )}
-
-                {/* Live Subtitles */}
-                {subtitle && subtitle.trim() && (
-                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 max-w-3xl w-full text-center px-6">
-                         <div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl border-2 border-indigo-200 shadow-2xl">
-                            <p className="text-gray-900 text-xl font-medium leading-relaxed tracking-wide">
-                                {subtitle}
+            {/* Info message when Unknown faces are detected */}
+            {recognitionResult && Array.isArray(recognitionResult) && recognitionResult.length > 0 &&
+                recognitionResult.every(r => r.name === 'Unknown') && (
+                    <div className="absolute bottom-32 left-1/2 -translate-x-1/2 max-w-md">
+                        <div className="bg-indigo-600/90 backdrop-blur-md px-6 py-3 rounded-2xl border border-indigo-400/50 shadow-xl">
+                            <p className="text-white text-sm font-medium text-center">
+                                💡 Upload contacts with photos to identify faces
                             </p>
                         </div>
                     </div>
                 )}
-            </div>
-        );
-    }
+
+            {/* Live Subtitles */}
+            {subtitle && subtitle.trim() && (
+                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 max-w-3xl w-full text-center px-6">
+                    <div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl border-2 border-indigo-200 shadow-2xl">
+                        <p className="text-gray-900 text-xl font-medium leading-relaxed tracking-wide">
+                            {subtitle}
+                        </p>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 
 export default HUDOverlay;
