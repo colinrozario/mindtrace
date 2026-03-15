@@ -84,7 +84,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                 hour12: true,
                 timeZone: 'Asia/Kolkata'
             }).format(date);
-        } catch (e) {
+        } catch {
             return null;
         }
     };
@@ -139,7 +139,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                 hour12: true,
                 timeZone: 'Asia/Kolkata'
             }).format(date);
-        } catch (e) {
+        } catch {
             return timestamp;
         }
     };

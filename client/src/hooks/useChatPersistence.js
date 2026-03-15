@@ -103,7 +103,8 @@ export const useChatPersistence = () => {
 
     // Mark as loaded after initial render
     useEffect(() => {
-        setIsLoaded(true);
+        const timer = setTimeout(() => setIsLoaded(true), 0);
+        return () => clearTimeout(timer);
     }, []);
 
     return {

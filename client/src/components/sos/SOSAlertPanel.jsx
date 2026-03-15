@@ -57,7 +57,6 @@ const SOSAlertPanel = ({
 
     // Active alert states
     const isPending = activeAlert.status === 'pending';
-    const isAcknowledged = activeAlert.status === 'acknowledged';
 
     return (
         <div

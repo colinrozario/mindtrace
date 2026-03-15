@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Search, Download, X, MapPin, Clock, Star, RefreshCw } from 'lucide-react';
 import { interactionsApi, asrApi, userApi } from '../services/api';
 import toast from 'react-hot-toast';
@@ -43,7 +43,7 @@ const InteractionHistory = () => {
     }
   };
 
-  const fetchInteractions = async () => {
+  const fetchInteractions = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -75,7 +75,7 @@ const InteractionHistory = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, starredOnly, useSemanticSearch]);
 
   useEffect(() => {
     // Debounce search
@@ -83,7 +83,7 @@ const InteractionHistory = () => {
       fetchInteractions();
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchQuery, starredOnly, useSemanticSearch]);
+  }, [fetchInteractions]);
 
   const handleToggleStar = async (e, id) => {
     e.stopPropagation();

@@ -16,8 +16,7 @@ let L = null;
 const SOSMap = ({
     location,
     isAlertActive = false,
-    showAccuracy = true,
-    onLocationClick
+    showAccuracy = true
 }) => {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
@@ -76,13 +75,13 @@ const SOSMap = ({
         };
 
         initMap();
-
         return () => {
             if (mapRef.current) {
                 mapRef.current.remove();
                 mapRef.current = null;
             }
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Update marker when location changes

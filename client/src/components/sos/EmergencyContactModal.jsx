@@ -41,16 +41,18 @@ const EmergencyContactModal = ({
           priority: 1,
         };
       }
-      setFormData(initial);
-      setOriginalData(initial);
-      setHasUnsavedChanges(false);
+      setTimeout(() => {
+        setFormData(initial);
+        setOriginalData(initial);
+        setHasUnsavedChanges(false);
+      }, 0);
     }
   }, [isOpen, initialData]);
 
   useEffect(() => {
     if (originalData) {
       const changed = JSON.stringify(formData) !== JSON.stringify(originalData);
-      setHasUnsavedChanges(changed);
+      setTimeout(() => setHasUnsavedChanges(changed), 0);
     }
   }, [formData, originalData]);
 

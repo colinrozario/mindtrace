@@ -35,7 +35,7 @@ const AddContactModal = ({ isOpen, onClose, onSave, navigateAfterSave = false })
       formData.visit_frequency !== '' ||
       formData.photos.length > 0;
 
-    setHasUnsavedChanges(hasChanges);
+    setTimeout(() => setHasUnsavedChanges(hasChanges), 0);
   }, [formData]);
 
   const handleFileChange = (e) => {

@@ -34,7 +34,7 @@ const Chatbot = () => {
         if (!isOpen && messages.length > 0) {
             const lastMessage = messages[messages.length - 1];
             if (lastMessage.role === 'assistant') {
-                setHasUnread(true);
+                setTimeout(() => setHasUnread(true), 0);
             }
         }
     }, [messages, isOpen]);
@@ -42,7 +42,7 @@ const Chatbot = () => {
     // Clear unread when chat is opened
     useEffect(() => {
         if (isOpen) {
-            setHasUnread(false);
+            setTimeout(() => setHasUnread(false), 0);
         }
     }, [isOpen]);
 

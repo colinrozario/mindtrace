@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Glasses, Monitor } from 'lucide-react';
 import HUDOverlay from '../components/HUDOverlay';
-import { faceApi, userApi } from '../services/api';
+import { userApi } from '../services/api';
 
 const FaceRecognition = () => {
     const [mode, setMode] = useState('standard'); // 'standard' or 'rayban'
@@ -16,7 +16,6 @@ const FaceRecognition = () => {
     const timeoutRef = useRef(null);
 
     const [subtitle, setSubtitle] = useState("");
-    const [userId, setUserId] = useState(null);
     const userIdRef = useRef(null); // Use ref to avoid stale closure
 
     // Extract token from URL on mount and fetch user profile
@@ -26,13 +25,13 @@ const FaceRecognition = () => {
 
         if (token) {
             localStorage.setItem('token', token);
-            setDebugStatus("Token received");
+            setTimeout(() => setDebugStatus("Token received"), 0);
             // Clean URL without reloading
             window.history.replaceState({}, document.title, window.location.pathname);
         } else {
             const existingToken = localStorage.getItem('token');
             if (!existingToken) {
-                setDebugStatus("No token - Auth required");
+                setTimeout(() => setDebugStatus("No token - Auth required"), 0);
             }
         }
 
@@ -43,13 +42,12 @@ const FaceRecognition = () => {
                 const response = await userApi.getProfile();
                 console.log("User profile response:", response.data);
                 const id = response.data.id;
-                setUserId(id);
                 userIdRef.current = id; // Store in ref for immediate access
                 console.log("User ID set to:", id);
-                setDebugStatus("User loaded");
+                setTimeout(() => setDebugStatus("User loaded"), 0);
             } catch (error) {
                 console.error("Error fetching user profile:", error);
-                setDebugStatus("User fetch failed");
+                setTimeout(() => setDebugStatus("User fetch failed"), 0);
             }
         };
 
@@ -57,7 +55,7 @@ const FaceRecognition = () => {
     }, []);
 
     // Start Camera
-    const startCamera = async () => {
+    const startCamera = useCallback(async () => {
         try {
             setDebugStatus("Requesting Camera...");
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -78,18 +76,17 @@ const FaceRecognition = () => {
             console.error("Error accessing camera:", err);
             setDebugStatus(`Cam Err: ${err.message}`);
         }
-    };
+    }, []);
 
-    const isProcessingRef = useRef(false);
     const loopActiveRef = useRef(false);
-    const lastRequestTimeRef = useRef(0);
     const MIN_REQUEST_INTERVAL = 8; // ~120 FPS for absolute maximum throughput
     const faceTrackingCache = useRef(new Map()); // Cache for smoother face tracking
     const velocityCache = useRef(new Map()); // Track velocity for predictive smoothing
     const frameInterpolationRef = useRef(null); // For frame interpolation between API calls
     const requestAnimationFrameId = useRef(null); // Track RAF for cleanup
+    const processFrameRef = useRef(null);
 
-    const captureFrame = () => {
+    const captureFrame = useCallback(() => {
         if (videoRef.current && canvasRef.current) {
             const video = videoRef.current;
             const canvas = canvasRef.current;
@@ -122,9 +119,9 @@ const FaceRecognition = () => {
             });
         }
         return null;
-    };
+    }, []);
 
-    const calculatePosition = (bbox) => {
+    const calculatePosition = useCallback((bbox) => {
         if (!videoRef.current || !bbox) return null;
 
         const video = videoRef.current;
@@ -171,7 +168,7 @@ const FaceRecognition = () => {
             width: screenW,
             height: screenH
         };
-    };
+    }, []);
 
     // --- Audio / ASR Logic ---
     const audioContextRef = useRef(null);
@@ -181,7 +178,7 @@ const FaceRecognition = () => {
     const isRecordingRef = useRef(false);
     const currentProfileIdRef = useRef(null); // Track active profile ID
 
-    const startRecording = async (profileId) => {
+    const startRecording = useCallback(async (profileId) => {
         if (isRecordingRef.current) {
             console.log("ASR already recording, skipping...");
             return;
@@ -212,7 +209,7 @@ const FaceRecognition = () => {
                 return;
             }
 
-            const wsUrl = apiBaseUrl.replace(/^http/, 'ws') + `/asr/${currentUserId}/${encodeURIComponent(profileId)}?token=${encodeURIComponent(token)}`;
+            const wsUrl = apiBaseUrl.replace(/^http/, 'ws').replace('localhost', '127.0.0.1') + `/asr/${currentUserId}/${encodeURIComponent(profileId)}?token=${encodeURIComponent(token)}`;
             console.log("Connecting to ASR WebSocket:", wsUrl.replace(token, '[TOKEN]'));
 
             wsRef.current = new WebSocket(wsUrl);
@@ -267,11 +264,6 @@ const FaceRecognition = () => {
                 }
             };
 
-            wsRef.current.onerror = (e) => {
-                console.error("ASR WebSocket error:", e);
-                setDebugStatus("ASR WS Error");
-            };
-
             wsRef.current.onclose = (e) => {
                 console.log("ASR WebSocket closed:", e.code, e.reason);
                 if (e.code === 1008) {
@@ -282,6 +274,11 @@ const FaceRecognition = () => {
                     setDebugStatus("ASR Disconnected");
                 }
                 isRecordingRef.current = false;
+            };
+
+            wsRef.current.onerror = (e) => {
+                console.error("ASR WebSocket error:", e);
+                setDebugStatus("ASR WS Error");
             };
 
             // Start Audio
@@ -365,9 +362,9 @@ const FaceRecognition = () => {
             setDebugStatus(`ASR Error: ${outerErr.message}`);
             isRecordingRef.current = false;
         }
-    };
+    }, []);
 
-    const stopRecording = () => {
+    const stopRecording = useCallback(() => {
         if (!isRecordingRef.current) return;
 
         console.log("Stopping ASR...");
@@ -395,7 +392,7 @@ const FaceRecognition = () => {
             audioContextRef.current.close();
             audioContextRef.current = null;
         }
-    };
+    }, []);
 
     // --- End Audio Logic ---
 
@@ -403,70 +400,20 @@ const FaceRecognition = () => {
         return () => {
             stopRecording(); // Cleanup on unmount
         }
-    }, []);
+    }, [stopRecording]);
 
     // ... existing refs and logic ...
 
     const faceWsRef = useRef(null);
     const isWaitingForResponseRef = useRef(false);
+    const connectFaceWebSocketRef = useRef();
 
     // Initial connection to Face Recognition WebSocket
-    const connectFaceWebSocket = () => {
-        const currentUserId = userIdRef.current;
-        if (!currentUserId || faceWsRef.current) return;
-
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-        const token = localStorage.getItem('token');
-
-        if (!token) return;
-
-        const wsUrl = apiBaseUrl.replace(/^http/, 'ws') + `/face/ws/recognize/${currentUserId}?token=${encodeURIComponent(token)}`;
-        console.log("Connecting to Face WebSocket:", wsUrl);
-
-        const ws = new WebSocket(wsUrl);
-        faceWsRef.current = ws;
-
-        ws.onopen = () => {
-            console.log("✓ Face WebSocket connected");
-            setDebugStatus("Face WS Connected");
-            processFrame(); // Start the loop
-        };
-
-        ws.onmessage = (event) => {
-            isWaitingForResponseRef.current = false;
-            try {
-                const data = JSON.parse(event.data);
-                handleRecognitionResult(data);
-
-                // Immediately trigger next frame after receiving response for lowest latency
-                // Use requestAnimationFrame to sync with display refresh
-                requestAnimationFrame(processFrame);
-            } catch (e) {
-                console.error("Face WS parse error:", e);
-                // Continue loop even on error
-                requestAnimationFrame(processFrame);
-            }
-        };
-
-        ws.onclose = () => {
-            console.log("Face WebSocket closed");
-            faceWsRef.current = null;
-            // Try to reconnect after a short delay if loop is still active
-            if (loopActiveRef.current) {
-                setTimeout(connectFaceWebSocket, 1000);
-            }
-        };
-
-        ws.onerror = (err) => {
-            console.error("Face WS Error:", err);
-            isWaitingForResponseRef.current = false;
-        };
-    };
 
     const tracksRef = useRef([]); // [{ id, x, y, w, h, lastSeen, data }]
     const nextTrackIdRef = useRef(1);
 
-    const updateTracks = (newDetections) => {
+    const updateTracks = useCallback((newDetections) => {
         const timestamp = Date.now();
         const assignments = new Array(newDetections.length).fill(-1);
         const usedTracks = new Set();
@@ -576,9 +523,9 @@ const FaceRecognition = () => {
                 height: track.h
             }
         }));
-    };
+    }, []);
 
-    const handleRecognitionResult = (data) => {
+    const handleRecognitionResult = useCallback((data) => {
         const results = Array.isArray(data) ? data : [data];
         const validResults = results.filter(r => r);
 
@@ -695,42 +642,41 @@ const FaceRecognition = () => {
                 // Scan indicator handled by blinking led in UI usually
             }
         }
-    };
+    }, [calculatePosition, updateTracks, startRecording, stopRecording]);
 
-    const processFrame = async () => {
+    const processFrame = useCallback(async () => {
         if (!loopActiveRef.current) return;
 
         // If WebSocket is not open, wait/reconnect
         if (!faceWsRef.current || faceWsRef.current.readyState !== WebSocket.OPEN) {
             // If completely missing, try connect
-            if (!faceWsRef.current) {
-                connectFaceWebSocket();
+            if (!faceWsRef.current && connectFaceWebSocketRef.current) {
+                connectFaceWebSocketRef.current();
             }
-            setTimeout(() => requestAnimationFrame(processFrame), 500);
+            setTimeout(() => {
+                if (processFrameRef.current) requestAnimationFrame(processFrameRef.current);
+            }, 500);
             return;
         }
 
         // Flow Control: If we are still waiting for a response, skip this frame
-        // This ensures we don't flood the server and build up latency
         if (isWaitingForResponseRef.current) {
-            // Optional: Add a timeout to force reset if stuck?
-            // For now, just skip.
-            // But valid to check if it's STUCK (e.g. > 2 sec)
             return;
         }
 
-        // Rate limit locally if needed, but with WS ping-pong it's self-regulating.
-        // We can just rely on the server response triggering the next frame.
-
         if (!videoRef.current || videoRef.current.paused || videoRef.current.ended || videoRef.current.readyState < 2) {
-            setTimeout(() => requestAnimationFrame(processFrame), 100);
+            setTimeout(() => {
+                if (processFrameRef.current) requestAnimationFrame(processFrameRef.current);
+            }, 100);
             return;
         }
 
         try {
             const blob = await captureFrame();
             if (!blob) {
-                setTimeout(() => requestAnimationFrame(processFrame), 100);
+                setTimeout(() => {
+                    if (processFrameRef.current) requestAnimationFrame(processFrameRef.current);
+                }, 100);
                 return;
             }
 
@@ -742,39 +688,102 @@ const FaceRecognition = () => {
         } catch (err) {
             console.error('Frame processing error:', err);
             isWaitingForResponseRef.current = false;
-            setTimeout(() => requestAnimationFrame(processFrame), 100);
+            setTimeout(() => {
+                if (processFrameRef.current) requestAnimationFrame(processFrameRef.current);
+            }, 100);
         }
-    };
+    }, [captureFrame]);
+
+    useEffect(() => {
+        processFrameRef.current = processFrame;
+    }, [processFrame]);
+
+    // Initial connection to Face Recognition WebSocket
+    const connectFaceWebSocket = useCallback(() => {
+        const currentUserId = userIdRef.current;
+        if (!currentUserId || faceWsRef.current) return;
+
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+        const token = localStorage.getItem('token');
+
+        if (!token) return;
+
+        const wsUrl = apiBaseUrl.replace(/^http/, 'ws').replace('localhost', '127.0.0.1') + `/face/ws/recognize/${currentUserId}?token=${encodeURIComponent(token)}`;
+        console.log("Connecting to Face WebSocket:", wsUrl);
+
+        const ws = new WebSocket(wsUrl);
+        faceWsRef.current = ws;
+
+        ws.onopen = () => {
+            console.log("✓ Face WebSocket connected");
+            setDebugStatus("Face WS Connected");
+            processFrame(); // Start the loop
+        };
+
+        ws.onmessage = (event) => {
+            isWaitingForResponseRef.current = false;
+            try {
+                const data = JSON.parse(event.data);
+                handleRecognitionResult(data);
+
+                // Immediately trigger next frame after receiving response for lowest latency
+                // Use requestAnimationFrame to sync with display refresh
+                requestAnimationFrame(processFrame);
+            } catch (e) {
+                console.error("Face WS parse error:", e);
+                // Continue loop even on error
+                requestAnimationFrame(processFrame);
+            }
+        };
+
+        ws.onclose = () => {
+            console.log("Face WebSocket closed");
+            faceWsRef.current = null;
+            // Try to reconnect after a short delay if loop is still active
+            if (loopActiveRef.current && connectFaceWebSocketRef.current) {
+                setTimeout(connectFaceWebSocketRef.current, 1000);
+            }
+        };
+
+        ws.onerror = (err) => {
+            console.error("Face WS Error:", err);
+            isWaitingForResponseRef.current = false;
+        };
+    }, [processFrame, handleRecognitionResult]);
+
+    useEffect(() => {
+        connectFaceWebSocketRef.current = connectFaceWebSocket;
+    }, [connectFaceWebSocket]);
 
     // Frame interpolation for ultra-smooth rendering between API calls
-    const interpolateFrames = () => {
-        if (!recognitionResult || !Array.isArray(recognitionResult) || recognitionResult.length === 0) {
-            return;
-        }
-
-        const interpolatedResults = recognitionResult.map(result => {
-            const cacheKey = `track_${result.trackId}`;
-            const velocity = velocityCache.current.get(cacheKey);
-
-            if (velocity && result.position) {
-                const interpolationFactor = 0.15;
-                return {
-                    ...result,
-                    position: {
-                        left: result.position.left + velocity.left * interpolationFactor,
-                        top: result.position.top + velocity.top * interpolationFactor,
-                        width: result.position.width + velocity.width * interpolationFactor,
-                        height: result.position.height + velocity.height * interpolationFactor
-                    }
-                };
+    const interpolateFrames = useCallback(() => {
+        setRecognitionResult(prev => {
+            if (!prev || !Array.isArray(prev) || prev.length === 0) {
+                return prev;
             }
-            return result;
+
+            return prev.map(result => {
+                const cacheKey = `track_${result.trackId}`;
+                const velocity = velocityCache.current.get(cacheKey);
+
+                if (velocity && result.position) {
+                    const interpolationFactor = 0.15;
+                    return {
+                        ...result,
+                        position: {
+                            left: result.position.left + velocity.left * interpolationFactor,
+                            top: result.position.top + velocity.top * interpolationFactor,
+                            width: result.position.width + velocity.width * interpolationFactor,
+                            height: result.position.height + velocity.height * interpolationFactor
+                        }
+                    };
+                }
+                return result;
+            });
         });
+    }, []);
 
-        setRecognitionResult(interpolatedResults);
-    };
-
-    const startRecognitionLoop = () => {
+    const startRecognitionLoop = useCallback(() => {
         if (loopActiveRef.current) return;
         loopActiveRef.current = true;
         setDebugStatus("Initialising WS...");
@@ -794,11 +803,20 @@ const FaceRecognition = () => {
 
         // Start frame interpolation at 120 FPS
         frameInterpolationRef.current = setInterval(interpolateFrames, 8);
-    };
+    }, [connectFaceWebSocket, interpolateFrames]);
 
     useEffect(() => {
-        startCamera();
-        startRecognitionLoop();
+        setTimeout(() => {
+            startCamera();
+            startRecognitionLoop();
+        }, 0);
+
+        // Capture refs for robust cleanup
+        const currentVideo = videoRef.current;
+        const currentInterp = frameInterpolationRef.current;
+        const currentRAF = requestAnimationFrameId.current;
+        const currentInterval = intervalRef.current;
+
         return () => {
             loopActiveRef.current = false;
             // Close WS
@@ -806,14 +824,14 @@ const FaceRecognition = () => {
                 faceWsRef.current.close();
                 faceWsRef.current = null;
             }
-            if (intervalRef.current) clearInterval(intervalRef.current);
-            if (frameInterpolationRef.current) clearInterval(frameInterpolationRef.current);
-            if (requestAnimationFrameId.current) cancelAnimationFrame(requestAnimationFrameId.current);
-            if (videoRef.current && videoRef.current.srcObject) {
-                videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+            if (currentInterval) clearInterval(currentInterval);
+            if (currentInterp) clearInterval(currentInterp);
+            if (currentRAF) cancelAnimationFrame(currentRAF);
+            if (currentVideo && currentVideo.srcObject) {
+                currentVideo.srcObject.getTracks().forEach(track => track.stop());
             }
         };
-    }, []);
+    }, [startCamera, startRecognitionLoop]);
 
     return (
         <div className="relative h-screen w-screen overflow-hidden bg-black">

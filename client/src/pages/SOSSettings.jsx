@@ -34,6 +34,7 @@ const SOSSettings = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Check for unsaved changes

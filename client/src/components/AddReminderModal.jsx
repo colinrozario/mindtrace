@@ -30,7 +30,7 @@ const AddReminderModal = ({ isOpen, onClose, onSave, navigateAfterSave = false }
       formData.recurrence !== 'daily' ||
       formData.notes !== '';
 
-    setHasUnsavedChanges(hasChanges);
+    setTimeout(() => setHasUnsavedChanges(hasChanges), 0);
   }, [formData]);
 
   const reminderTypes = [

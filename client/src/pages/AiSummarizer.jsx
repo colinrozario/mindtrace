@@ -259,7 +259,7 @@ const AiSummarizer = () => {
                                 minute: '2-digit',
                                 hour12: true
                               }) + ' IST';
-                            } catch (e) {
+                            } catch {
                               formattedDate = source.timestamp;
                             }
                           }

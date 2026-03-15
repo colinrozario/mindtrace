@@ -21,13 +21,10 @@ const DashboardHome = () => {
     unreadAlerts: 0,
     upcomingReminders: 0
   });
-  const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
 
   const fetchData = async () => {
     try {
-      setLoading(true);
-
       // Fetch Profile
       const profileRes = await userApi.getProfile();
       setProfile(profileRes.data);
@@ -51,13 +48,12 @@ const DashboardHome = () => {
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
       toast.error("Failed to load dashboard data");
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    const timer = setTimeout(() => fetchData(), 0);
+    return () => clearTimeout(timer);
   }, []);
 
 

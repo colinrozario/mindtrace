@@ -273,7 +273,7 @@ const ContactsDirectory = () => {
             setShowDetailModal(false);
             setSelectedContact(null);
           }}
-          onEdit={(contact) => {
+          onEdit={() => {
             setShowDetailModal(false);
             setShowEditModal(true);
           }}
