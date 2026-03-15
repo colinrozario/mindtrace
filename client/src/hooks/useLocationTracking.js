@@ -27,8 +27,8 @@ export const useLocationTracking = ({ enablePolling = false, pollInterval = 5000
     // Check if location is stale
     useEffect(() => {
         if (!lastUpdate) {
-            setIsStale(false);
-            return;
+            const timer = setTimeout(() => setIsStale(false), 0);
+            return () => clearTimeout(timer);
         }
 
         const checkStale = () => {
@@ -174,9 +174,12 @@ export const useLocationTracking = ({ enablePolling = false, pollInterval = 5000
 
     // Initialize on mount - try real location first
     useEffect(() => {
-        if (!currentLocation) {
-            requestRealLocation();
-        }
+        const timer = setTimeout(() => {
+            if (!currentLocation) {
+                requestRealLocation();
+            }
+        }, 0);
+        return () => clearTimeout(timer);
     }, [currentLocation, requestRealLocation]);
 
     // Polling for location updates

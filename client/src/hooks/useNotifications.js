@@ -142,12 +142,13 @@ export const useNotifications = () => {
 
     // Load preferences on mount
     useEffect(() => {
-        setPreferences(loadPreferences());
+        const timer = setTimeout(() => setPreferences(loadPreferences()), 0);
 
         // Check browser notification permission
         if ('Notification' in window) {
-            setHasPermission(Notification.permission === 'granted');
+            setTimeout(() => setHasPermission(Notification.permission === 'granted'), 0);
         }
+        return () => clearTimeout(timer);
     }, []);
 
     /**

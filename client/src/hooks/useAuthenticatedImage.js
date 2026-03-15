@@ -11,7 +11,7 @@ export const useAuthenticatedImage = (imageUrl) => {
 
   useEffect(() => {
     if (!imageUrl) {
-      setBlobUrl(null);
+      setTimeout(() => setBlobUrl(null), 0);
       return;
     }
 

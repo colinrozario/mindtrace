@@ -29,14 +29,14 @@ const SOSNotificationBanner = ({
     // Handle show/hide animation
     useEffect(() => {
         if (show) {
-            setIsAnimating(true);
+            setTimeout(() => setIsAnimating(true), 0);
             // Small delay before showing for animation
             const timer = setTimeout(() => {
                 setIsVisible(true);
             }, 50);
             return () => clearTimeout(timer);
         } else {
-            setIsVisible(false);
+            setTimeout(() => setIsVisible(false), 0);
             // Wait for animation to complete before removing
             const timer = setTimeout(() => {
                 setIsAnimating(false);

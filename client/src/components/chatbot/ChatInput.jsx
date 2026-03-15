@@ -23,7 +23,6 @@ const ChatInput = ({
     const [message, setMessage] = useState('');
     const [attachments, setAttachments] = useState([]);
     const textareaRef = useRef(null);
-    const fileInputRef = useRef(null);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -63,21 +62,7 @@ const ChatInput = ({
         }
     };
 
-    /**
-     * Handles file selection
-     * @param {React.ChangeEvent<HTMLInputElement>} e - Change event
-     */
-    const handleFileChange = (e) => {
-        const files = Array.from(e.target.files || []);
-        const newAttachments = files.map((file) => ({
-            id: `${Date.now()}_${file.name}`,
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            file,
-        }));
-        setAttachments((prev) => [...prev, ...newAttachments].slice(0, 5)); // Max 5 attachments
-    };
+
 
     /**
      * Removes an attachment

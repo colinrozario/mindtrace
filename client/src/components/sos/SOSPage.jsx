@@ -32,7 +32,6 @@ const SOSPage = () => {
         alertHistory,
         isLoading,
         isTestMode,
-        triggerAlert,
         acknowledgeAlert,
         resolveAlert,
         clearHistory,
@@ -45,7 +44,6 @@ const SOSPage = () => {
         batteryLevel,
         connectionStatus,
         isStale,
-        setRandomLocation,
         getTimeSinceUpdate
     } = useLocationTracking({ enablePolling: true, pollInterval: 3000 });
 
@@ -104,6 +102,19 @@ const SOSPage = () => {
     const [isSOSSoundPlaying, setIsSOSSoundPlaying] = useState(false);
     const audioContextRef = useRef(null);
     const ringtoneIntervalRef = useRef(null);
+
+    // Stop SOS sound
+    const stopSOSSound = useCallback(() => {
+        if (ringtoneIntervalRef.current) {
+            clearInterval(ringtoneIntervalRef.current);
+            ringtoneIntervalRef.current = null;
+        }
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close().catch(() => { });
+            audioContextRef.current = null;
+        }
+        setIsSOSSoundPlaying(false);
+    }, []);
 
     // Play SOS ringtone similar to iPhone
     const playSOSSound = useCallback(() => {
@@ -177,20 +188,7 @@ const SOSPage = () => {
         } catch (error) {
             console.warn('SOS Audio playback failed:', error);
         }
-    }, [isSOSSoundPlaying]);
-
-    // Stop SOS sound
-    const stopSOSSound = useCallback(() => {
-        if (ringtoneIntervalRef.current) {
-            clearInterval(ringtoneIntervalRef.current);
-            ringtoneIntervalRef.current = null;
-        }
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.close().catch(() => { });
-            audioContextRef.current = null;
-        }
-        setIsSOSSoundPlaying(false);
-    }, []);
+    }, [isSOSSoundPlaying, stopSOSSound]);
 
     // Toggle SOS sound and notification
     const toggleSOSSound = useCallback(() => {
@@ -290,7 +288,7 @@ const SOSPage = () => {
                             transition-all duration-300 transform hover:scale-105 active:scale-95
                             ${isSOSSoundPlaying
                                 ? 'bg-gray-600 hover:bg-gray-700'
-                                : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg hover:shadow-red-500/25'
+                                : 'bg-linear-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg hover:shadow-red-500/25'
                             }
                         `}
                         title={isSOSSoundPlaying ? 'Stop SOS Sound' : 'Play SOS Sound'}

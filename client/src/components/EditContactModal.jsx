@@ -64,8 +64,10 @@ const EditContactModal = ({ isOpen, onClose, contact, onUpdate }) => {
         visit_frequency: contact.visit_frequency || '',
         photos: contact.photos || []
       };
-      setFormData(initialData);
-      setOriginalData(initialData);
+      setTimeout(() => {
+        setFormData(initialData);
+        setOriginalData(initialData);
+      }, 0);
     }
   }, [contact]);
 
@@ -73,7 +75,7 @@ const EditContactModal = ({ isOpen, onClose, contact, onUpdate }) => {
   useEffect(() => {
     if (originalData) {
       const changed = JSON.stringify(formData) !== JSON.stringify(originalData);
-      setHasUnsavedChanges(changed);
+      setTimeout(() => setHasUnsavedChanges(changed), 0);
     }
   }, [formData, originalData]);
 

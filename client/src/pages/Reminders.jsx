@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Clock, CheckCircle2, Circle, Trash2, Bell, Filter, X } from 'lucide-react';
 import AddReminderModal from '../components/AddReminderModal';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
@@ -17,7 +17,7 @@ const Reminders = () => {
     return savedPreference !== 'false';
   });
 
-  const fetchReminders = async () => {
+  const fetchReminders = useCallback(async () => {
     try {
       setLoading(true);
       const params = {
@@ -31,11 +31,11 @@ const Reminders = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedType]);
 
   useEffect(() => {
     fetchReminders();
-  }, [selectedType]);
+  }, [fetchReminders]);
 
   const handleToggleComplete = async (id) => {
     const promise = remindersApi.toggleComplete(id);

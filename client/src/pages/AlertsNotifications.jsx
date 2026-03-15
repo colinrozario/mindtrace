@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, AlertCircle, Info, AlertTriangle, X, Filter, Trash2, Loader2 } from 'lucide-react';
 import { alertsApi } from '../services/api';
 import toast from 'react-hot-toast';
@@ -93,7 +93,7 @@ const AlertsNotifications = () => {
     }
   };
 
-  const fetchAlerts = async (showLoading = true) => {
+  const fetchAlerts = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
       const params = {
@@ -107,7 +107,7 @@ const AlertsNotifications = () => {
     } finally {
       if (showLoading) setLoading(false);
     }
-  };
+  }, [selectedSeverity]);
 
   // Monitor alerts for changes to trigger sound
   useEffect(() => {
@@ -137,20 +137,18 @@ const AlertsNotifications = () => {
 
   }, [alerts, loading]);
 
-  // Initial fetch and reset on filter change
   useEffect(() => {
     isFirstLoad.current = true;
     fetchAlerts(true);
-  }, [selectedSeverity]);
+  }, [fetchAlerts]);
 
-  // Polling for new alerts
   useEffect(() => {
     const intervalId = setInterval(() => {
       fetchAlerts(false);
     }, 5000); // Poll every 5 seconds
 
     return () => clearInterval(intervalId);
-  }, [selectedSeverity]);
+  }, [fetchAlerts]);
 
   const handleMarkRead = async (e, id) => {
     e.stopPropagation();

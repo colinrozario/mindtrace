@@ -24,11 +24,11 @@ const SOSQuickInfo = ({
     isStale = false
 }) => {
     const handleCall = (phone) => {
-        window.location.href = `tel:${phone.replace(/\s/g, '')}`;
+        window.location.assign(`tel:${phone.replace(/\s/g, '')}`);
     };
 
     const handleMessage = (phone) => {
-        window.location.href = `sms:${phone.replace(/\s/g, '')}`;
+        window.location.assign(`sms:${phone.replace(/\s/g, '')}`);
     };
 
     return (

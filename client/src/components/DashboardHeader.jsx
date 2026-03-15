@@ -128,6 +128,7 @@ const DashboardHeader = ({ onMenuClick }) => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showResults, selectedIndex, pageResults, searchResults]);
 
   // Search data from API (debounced) - includes backend page search

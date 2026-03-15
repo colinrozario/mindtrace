@@ -1,15 +1,15 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import FAQSection from '../components/FAQSection';
 import { Brain, Mic, Eye, Shield, Clock, Zap, Heart, Users, Lock, Smartphone, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import Lenis from 'lenis';
-import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
+// eslint-disable-next-line no-unused-vars
+import { motion, useScroll, useTransform } from 'framer-motion';
 
 const Landing = () => {
   const navigate = useNavigate();
-  const containerRef = useRef(null);
 
   // Smooth Scroll Setup
   useEffect(() => {
@@ -86,14 +86,7 @@ const Landing = () => {
     }
   };
 
-  const scaleIn = {
-    hidden: { scale: 0.9, opacity: 0 },
-    visible: {
-      scale: 1,
-      opacity: 1,
-      transition: { duration: 0.6, ease: "easeOut" }
-    }
-  };
+
 
   const scrollToContent = () => {
     const element = document.getElementById('product-showcase');
