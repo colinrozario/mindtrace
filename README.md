@@ -4,7 +4,7 @@
 
 <div align="center">
 
-![Smart Glasses Integration](screenshots/meta-glasses.jpeg)
+![Smart Glasses Integration](screenshots/meta-glasses.png)
 
 *Empowering users with memory challenges through real-time AI assistance on wearable devices*
 
@@ -77,7 +77,7 @@ MindTrace is a production-ready AI memory assistant designed for Ray-Ban Meta sm
 *One-touch emergency alerts with GPS location sharing for caregivers*
 
 ### Smart Glasses Integration
-![Meta Glasses](screenshots/meta-glasses.jpeg)
+![Meta Glasses](screenshots/meta-glasses.png)
 *Real-time HUD overlay on Ray-Ban Meta smart glasses with face recognition and transcription*
 
 </div>
