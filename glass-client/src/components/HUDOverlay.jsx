@@ -304,16 +304,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                         </div>
                     )}
 
-                {/* Live Subtitles */}
-                {subtitle && subtitle.trim() && (
-                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 max-w-3xl w-full text-center px-6">
-                        <div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl border-2 border-indigo-200 shadow-2xl">
-                            <p className="text-gray-900 text-xl font-medium leading-relaxed tracking-wide">
-                                {subtitle}
-                            </p>
-                        </div>
-                    </div>
-                )}
+
             </div>
         );
     }
@@ -385,16 +376,7 @@ const HUDOverlay = ({ mode, recognitionResult, debugStatus, subtitle }) => {
                     </div>
                 )}
 
-            {/* Live Subtitles */}
-            {subtitle && subtitle.trim() && (
-                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 max-w-3xl w-full text-center px-6">
-                    <div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl border-2 border-indigo-200 shadow-2xl">
-                        <p className="text-gray-900 text-xl font-medium leading-relaxed tracking-wide">
-                            {subtitle}
-                        </p>
-                    </div>
-                </div>
-            )}
+
         </div>
     );
 }
