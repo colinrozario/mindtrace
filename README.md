@@ -20,15 +20,11 @@ Whether it's real-time face recognition on a HUD (Heads-Up Display) or a compreh
 
 ## 📸 Visual Showcase
 
-````carousel
-![Dashboard](./screenshots/dashboard.jpeg)
-<!-- slide -->
-![AI Summarizer](./screenshots/ai-summarizer.jpg)
-<!-- slide -->
-![Contact Directory](./screenshots/contact.jpeg)
-<!-- slide -->
-![HUD Interface](./screenshots/meta-glasses.png)
-````
+| **Dashboard** | **AI Summarizer** |
+| :---: | :---: |
+| ![Dashboard](./screenshots/dashboard.jpeg) | ![AI Summarizer](./screenshots/ai-summarizer.jpg) |
+| **Contact Directory** | **HUD Interface** |
+| ![Contact Directory](./screenshots/contact.jpeg) | ![HUD Interface](./screenshots/meta-glasses.png) |
 
 ---
 
